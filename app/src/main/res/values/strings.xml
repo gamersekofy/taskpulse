@@ -1,0 +1,18 @@
+<resources>
+    <string name="app_name">TaskPulse</string>
+    <string name="nav_focus">Focus</string>
+    <string name="nav_projects">Projects</string>
+    <string name="nav_schedule">Schedule</string>
+    <string name="action_sign_in_google">Sign in with Google</string>
+    <string name="action_sign_out">Sign out</string>
+    <string name="action_add_project">New Project</string>
+    <string name="action_add_work_item">Add Work Item</string>
+    <string name="live_update_channel_name">Active Pomodoro Sessions</string>
+    <string name="live_update_channel_description">Displays real-time Pomodoro focus &amp; break progress via Android Live Updates.</string>
+    <string name="pomodoro_alert_channel_name">Pomodoro Alerts</string>
+    <string name="pomodoro_alert_channel_description">Alerts you when a work period or break is about to end or transition.</string>
+    <string name="notif_action_pause">Pause</string>
+    <string name="notif_action_resume">Resume</string>
+    <string name="notif_action_next">Next</string>
+    <string name="notif_action_done">Complete</string>
+</resources>

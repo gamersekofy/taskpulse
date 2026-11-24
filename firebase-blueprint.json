@@ -1,0 +1,191 @@
+{
+  "entities": {
+    "Project": {
+      "title": "Project",
+      "description": "A user-owned project grouping related work items with a theme color, icon, and optional target deadline.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "UID of the authenticated owner."
+        },
+        "name": {
+          "type": "string",
+          "description": "Project title (1-60 characters)."
+        },
+        "description": {
+          "type": "string",
+          "description": "Short project summary (0-300 characters)."
+        },
+        "colorKey": {
+          "type": "string",
+          "enum": ["CORAL", "INDIGO", "MINT", "AMBER", "BERRY", "SKY"],
+          "description": "Expressive theme accent key."
+        },
+        "iconKey": {
+          "type": "string",
+          "enum": ["ROCKET", "PALETTE", "CODE", "BOOK", "BOLT", "HEART"],
+          "description": "Expressive project icon key."
+        },
+        "deadlineMillis": {
+          "type": "integer",
+          "description": "Optional project deadline in UTC epoch milliseconds (0 if unset)."
+        },
+        "archived": {
+          "type": "boolean",
+          "description": "Whether the project is archived."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server last-updated timestamp (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": [
+        "userId",
+        "name",
+        "description",
+        "colorKey",
+        "iconKey",
+        "deadlineMillis",
+        "archived",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "WorkItem": {
+      "title": "WorkItem",
+      "description": "A scheduled task/work item belonging to a project with customizable Pomodoro focus & break periods, live countdown tracking, and deadline.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "UID of the authenticated owner."
+        },
+        "projectId": {
+          "type": "string",
+          "description": "ID of the parent Project document under the same user."
+        },
+        "title": {
+          "type": "string",
+          "description": "Work item title (1-100 characters)."
+        },
+        "notes": {
+          "type": "string",
+          "description": "Optional notes or checklist details (0-500 characters)."
+        },
+        "priority": {
+          "type": "string",
+          "enum": ["LOW", "MEDIUM", "HIGH"],
+          "description": "Priority level."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["TODO", "IN_PROGRESS", "PAUSED", "DONE"],
+          "description": "Current execution state."
+        },
+        "scheduledStartMillis": {
+          "type": "integer",
+          "description": "Planned work start time in UTC epoch milliseconds."
+        },
+        "projectedDurationMinutes": {
+          "type": "integer",
+          "description": "Total projected active work duration in minutes (1-1440)."
+        },
+        "deadlineMillis": {
+          "type": "integer",
+          "description": "Deadline in UTC epoch milliseconds (0 if unset)."
+        },
+        "progressPercent": {
+          "type": "integer",
+          "description": "User/session completion percentage (0-100)."
+        },
+        "elapsedSeconds": {
+          "type": "integer",
+          "description": "Accumulated active work seconds across completed/paused work periods."
+        },
+        "sessionStartedAtMillis": {
+          "type": "integer",
+          "description": "UTC epoch ms when the current live Pomodoro period started (0 if not actively running)."
+        },
+        "pomodoroWorkMinutes": {
+          "type": "integer",
+          "description": "Length of each Pomodoro work period in minutes (1-120)."
+        },
+        "pomodoroBreakMinutes": {
+          "type": "integer",
+          "description": "Length of each Pomodoro break period in minutes (1-60)."
+        },
+        "pomodoroWorkPeriods": {
+          "type": "integer",
+          "description": "Total number of work periods planned for this work item (1-12)."
+        },
+        "pomodoroBreakCount": {
+          "type": "integer",
+          "description": "Total number of rest/break periods planned between or after work periods (0-12)."
+        },
+        "pomodoroPhase": {
+          "type": "string",
+          "enum": ["WORK", "BREAK"],
+          "description": "Current active or paused Pomodoro phase."
+        },
+        "currentPeriodIndex": {
+          "type": "integer",
+          "description": "1-indexed current work or break period number (1-12)."
+        },
+        "phaseElapsedSeconds": {
+          "type": "integer",
+          "description": "Seconds already elapsed in the current Pomodoro phase prior to sessionStartedAtMillis."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp (FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server last-updated timestamp (FieldValue.serverTimestamp())."
+        }
+      },
+      "required": [
+        "userId",
+        "projectId",
+        "title",
+        "notes",
+        "priority",
+        "status",
+        "scheduledStartMillis",
+        "projectedDurationMinutes",
+        "deadlineMillis",
+        "progressPercent",
+        "elapsedSeconds",
+        "sessionStartedAtMillis",
+        "pomodoroWorkMinutes",
+        "pomodoroBreakMinutes",
+        "pomodoroWorkPeriods",
+        "pomodoroBreakCount",
+        "pomodoroPhase",
+        "currentPeriodIndex",
+        "phaseElapsedSeconds",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/projects/{projectId}": {
+      "schema": { "$ref": "#/entities/Project" },
+      "description": "User-owned projects."
+    },
+    "/users/{userId}/workItems/{workItemId}": {
+      "schema": { "$ref": "#/entities/WorkItem" },
+      "description": "User-owned work items linked to a parent project."
+    }
+  }
+}

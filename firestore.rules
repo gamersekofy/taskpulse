@@ -1,0 +1,185 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net: deny all reads and writes by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidProjectColor(colorKey) {
+      return colorKey in ['CORAL', 'INDIGO', 'MINT', 'AMBER', 'BERRY', 'SKY'];
+    }
+
+    function isValidProjectIcon(iconKey) {
+      return iconKey in ['ROCKET', 'PALETTE', 'CODE', 'BOOK', 'BOLT', 'HEART'];
+    }
+
+    function isValidProject(data, userId) {
+      return data.userId is string &&
+             data.userId == userId &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 60 &&
+             data.description is string && data.description.size() <= 300 &&
+             data.colorKey is string && isValidProjectColor(data.colorKey) &&
+             data.iconKey is string && isValidProjectIcon(data.iconKey) &&
+             data.deadlineMillis is int && data.deadlineMillis >= 0 &&
+             data.archived is bool &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidPriority(priority) {
+      return priority in ['LOW', 'MEDIUM', 'HIGH'];
+    }
+
+    function isValidStatus(status) {
+      return status in ['TODO', 'IN_PROGRESS', 'PAUSED', 'DONE'];
+    }
+
+    function isValidPomodoroPhase(phase) {
+      return phase in ['WORK', 'BREAK'];
+    }
+
+    function isValidWorkItem(data, userId) {
+      return data.userId is string &&
+             data.userId == userId &&
+             isValidId(data.projectId) &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 100 &&
+             data.notes is string && data.notes.size() <= 500 &&
+             data.priority is string && isValidPriority(data.priority) &&
+             data.status is string && isValidStatus(data.status) &&
+             data.scheduledStartMillis is int && data.scheduledStartMillis >= 0 &&
+             data.projectedDurationMinutes is int && data.projectedDurationMinutes >= 1 && data.projectedDurationMinutes <= 1440 &&
+             data.deadlineMillis is int && data.deadlineMillis >= 0 &&
+             data.progressPercent is int && data.progressPercent >= 0 && data.progressPercent <= 100 &&
+             data.elapsedSeconds is int && data.elapsedSeconds >= 0 && data.elapsedSeconds <= 8640000 &&
+             data.sessionStartedAtMillis is int && data.sessionStartedAtMillis >= 0 &&
+             (!('pomodoroWorkMinutes' in data) || (data.pomodoroWorkMinutes is int && data.pomodoroWorkMinutes >= 1 && data.pomodoroWorkMinutes <= 120)) &&
+             (!('pomodoroBreakMinutes' in data) || (data.pomodoroBreakMinutes is int && data.pomodoroBreakMinutes >= 1 && data.pomodoroBreakMinutes <= 60)) &&
+             (!('pomodoroWorkPeriods' in data) || (data.pomodoroWorkPeriods is int && data.pomodoroWorkPeriods >= 1 && data.pomodoroWorkPeriods <= 12)) &&
+             (!('pomodoroBreakCount' in data) || (data.pomodoroBreakCount is int && data.pomodoroBreakCount >= 0 && data.pomodoroBreakCount <= 12)) &&
+             (!('pomodoroPhase' in data) || (data.pomodoroPhase is string && isValidPomodoroPhase(data.pomodoroPhase))) &&
+             (!('currentPeriodIndex' in data) || (data.currentPeriodIndex is int && data.currentPeriodIndex >= 1 && data.currentPeriodIndex <= 12)) &&
+             (!('phaseElapsedSeconds' in data) || (data.phaseElapsedSeconds is int && data.phaseElapsedSeconds >= 0 && data.phaseElapsedSeconds <= 86400)) &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    match /users/{userId}/projects/{projectId} {
+      allow list: if isOwner(userId);
+      allow get: if isOwner(userId) && isValidId(projectId);
+
+      allow create: if isOwner(userId) &&
+                       isValidId(projectId) &&
+                       incoming().keys().hasAll([
+                         'userId', 'name', 'description', 'colorKey', 'iconKey',
+                         'deadlineMillis', 'archived', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'name', 'description', 'colorKey', 'iconKey',
+                         'deadlineMillis', 'archived', 'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidProject(incoming(), userId);
+
+      allow update: if isOwner(userId) &&
+                       isValidId(projectId) &&
+                       isValidProject(incoming(), userId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       (
+                         (incoming().diff(existing()).affectedKeys().hasOnly([
+                           'name', 'description', 'colorKey', 'iconKey', 'deadlineMillis', 'updatedAt'
+                         ])) ||
+                         (incoming().diff(existing()).affectedKeys().hasOnly(['archived', 'updatedAt']))
+                       );
+
+      allow delete: if isOwner(userId) && isValidId(projectId);
+    }
+
+    match /users/{userId}/workItems/{workItemId} {
+      allow list: if isOwner(userId);
+      allow get: if isOwner(userId) && isValidId(workItemId);
+
+      allow create: if isOwner(userId) &&
+                       isValidId(workItemId) &&
+                       incoming().keys().hasAll([
+                         'userId', 'projectId', 'title', 'notes', 'priority', 'status',
+                         'scheduledStartMillis', 'projectedDurationMinutes', 'deadlineMillis',
+                         'progressPercent', 'elapsedSeconds', 'sessionStartedAtMillis',
+                         'pomodoroWorkMinutes', 'pomodoroBreakMinutes', 'pomodoroWorkPeriods',
+                         'pomodoroBreakCount', 'pomodoroPhase', 'currentPeriodIndex',
+                         'phaseElapsedSeconds', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'projectId', 'title', 'notes', 'priority', 'status',
+                         'scheduledStartMillis', 'projectedDurationMinutes', 'deadlineMillis',
+                         'progressPercent', 'elapsedSeconds', 'sessionStartedAtMillis',
+                         'pomodoroWorkMinutes', 'pomodoroBreakMinutes', 'pomodoroWorkPeriods',
+                         'pomodoroBreakCount', 'pomodoroPhase', 'currentPeriodIndex',
+                         'phaseElapsedSeconds', 'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidWorkItem(incoming(), userId) &&
+                       exists(/databases/$(database)/documents/users/$(userId)/projects/$(incoming().projectId));
+
+      allow update: if isOwner(userId) &&
+                       isValidId(workItemId) &&
+                       isValidWorkItem(incoming(), userId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       (
+                         // Action: Edit work item details & Pomodoro configuration (only when not DONE)
+                         (
+                           existing().status != 'DONE' &&
+                           incoming().diff(existing()).affectedKeys().hasOnly([
+                             'projectId', 'title', 'notes', 'priority',
+                             'scheduledStartMillis', 'projectedDurationMinutes', 'deadlineMillis',
+                             'pomodoroWorkMinutes', 'pomodoroBreakMinutes', 'pomodoroWorkPeriods',
+                             'pomodoroBreakCount', 'pomodoroPhase', 'currentPeriodIndex',
+                             'phaseElapsedSeconds', 'updatedAt'
+                           ]) &&
+                           exists(/databases/$(database)/documents/users/$(userId)/projects/$(incoming().projectId))
+                         ) ||
+                         // Action: Live Pomodoro session transition (start, pause, next phase, complete, progress scrub)
+                         (
+                           existing().status != 'DONE' &&
+                           incoming().diff(existing()).affectedKeys().hasOnly([
+                             'status', 'progressPercent', 'elapsedSeconds', 'sessionStartedAtMillis',
+                             'pomodoroPhase', 'currentPeriodIndex', 'phaseElapsedSeconds', 'updatedAt'
+                           ])
+                         ) ||
+                         // Action: Reopen a completed work item back to TODO
+                         (
+                           existing().status == 'DONE' &&
+                           incoming().status == 'TODO' &&
+                           incoming().diff(existing()).affectedKeys().hasOnly([
+                             'status', 'progressPercent', 'sessionStartedAtMillis',
+                             'pomodoroPhase', 'currentPeriodIndex', 'phaseElapsedSeconds', 'updatedAt'
+                           ])
+                         )
+                       );
+
+      allow delete: if isOwner(userId) && isValidId(workItemId);
+    }
+  }
+}

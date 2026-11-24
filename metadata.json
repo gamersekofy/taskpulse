@@ -1,0 +1,6 @@
+{
+  "name": "TaskPulse",
+  "description": "Playful Material 3 Expressive project manager with real-time deadline tracking, scheduled work sessions, and Android Live Updates.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
