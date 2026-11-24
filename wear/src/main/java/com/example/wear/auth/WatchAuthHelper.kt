@@ -11,7 +11,6 @@ import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.wear.remote.interactions.RemoteActivityHelper
-import com.example.wear.R
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential.Companion.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL
@@ -35,7 +34,9 @@ object WatchAuthHelper {
         onCancelled: () -> Unit
     ) {
         val clientId = try {
-            context.getString(R.string.default_web_client_id)
+            context.getString(
+                context.resources.getIdentifier("default_web_client_id", "string", context.packageName)
+            )
         } catch (_: Exception) {
             onError("Google Sign-In configuration missing.")
             return
