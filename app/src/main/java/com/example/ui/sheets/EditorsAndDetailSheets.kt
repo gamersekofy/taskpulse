@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -30,7 +31,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Delete
@@ -69,7 +69,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
-import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.material3.TonalToggleButton
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.material3.rememberDatePickerState
@@ -87,7 +86,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
@@ -107,8 +105,9 @@ import com.example.ui.components.PomodoroTimelineStrip
 import com.example.ui.components.ProjectAccentBadge
 import com.example.ui.components.bouncyPressScale
 import com.example.ui.components.rememberExpressiveHaptics
+import com.example.ui.theme.CountdownCondensedLargeStyle
+import com.example.ui.theme.DarkMintTertiary
 import com.example.ui.theme.MintTertiary
-import com.example.ui.theme.MonoTimerLargeStyle
 import java.util.Calendar
 import kotlin.math.roundToInt
 
@@ -205,6 +204,7 @@ fun ProjectEditorSheet(
             )
 
             Text("Color", style = MaterialTheme.typography.titleSmall)
+            val darkTheme = isSystemInDarkTheme()
             FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -212,13 +212,15 @@ fun ProjectEditorSheet(
             ) {
                 ProjectColor.entries.forEach { colorOption ->
                     val selected = colorOption == selectedColor
+                    val swatchColor = colorOption.vibrantColor(darkTheme)
+                    val swatchCheckTint = colorOption.onVibrantColor(darkTheme)
                     val interaction = remember(colorOption) { MutableInteractionSource() }
                     Box(
                         modifier = Modifier
                             .requiredSize(44.dp)
                             .bouncyPressScale(interaction, pressedScale = 0.88f)
                             .clip(CircleShape)
-                            .background(colorOption.solid)
+                            .background(swatchColor)
                             .then(
                                 if (selected) {
                                     Modifier.border(3.dp, MaterialTheme.colorScheme.onSurface, CircleShape)
@@ -237,7 +239,7 @@ fun ProjectEditorSheet(
                             Icon(
                                 imageVector = Icons.Rounded.Check,
                                 contentDescription = "Selected ${colorOption.label}",
-                                tint = Color.White,
+                                tint = swatchCheckTint,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -1062,6 +1064,9 @@ fun WorkItemDetailSheet(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
+                    val darkTheme = isSystemInDarkTheme()
+                    val mintTone = if (darkTheme) DarkMintTertiary else MintTertiary
+                    val workAccent = project?.accent?.vibrantColor(darkTheme) ?: MaterialTheme.colorScheme.primary
                     val labelText = when {
                         isDone -> "Pomodoro Complete"
                         snap.overtimeSeconds > 0L -> "Period Overtime"
@@ -1071,7 +1076,7 @@ fun WorkItemDetailSheet(
                     Text(
                         text = labelText,
                         style = MaterialTheme.typography.labelMedium,
-                        color = if (isBreak) MintTertiary else MaterialTheme.colorScheme.onSurfaceVariant
+                        color = if (isBreak) mintTone else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Text(
                         text = when {
@@ -1079,18 +1084,18 @@ fun WorkItemDetailSheet(
                             snap.overtimeSeconds > 0L -> "+${TimeFormatting.formatDurationClock(snap.overtimeSeconds)}"
                             else -> TimeFormatting.formatDurationClock(snap.phaseRemainingSeconds)
                         },
-                        style = MonoTimerLargeStyle
+                        style = CountdownCondensedLargeStyle
                     )
                     PomodoroTimelineStrip(
                         slots = snap.slots,
-                        workAccent = project?.accent?.solid ?: MaterialTheme.colorScheme.primary
+                        workAccent = workAccent
                     )
                     LinearWavyProgressIndicator(
                         progress = { snap.phaseFraction },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(10.dp),
-                        color = if (isBreak) MintTertiary else (project?.accent?.solid ?: MaterialTheme.colorScheme.primary),
+                        color = if (isBreak) mintTone else workAccent,
                         trackColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                         amplitude = { p -> if (isRunning && p > 0f && p < 1f) 1f else 0f }
                     )

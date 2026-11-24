@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -16,6 +17,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
@@ -29,6 +31,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,9 +63,20 @@ fun ScheduleScreen(
     onDeleteItem: (WorkItem) -> Unit,
     onAddWorkItem: () -> Unit,
     onCreateProject: () -> Unit,
+    onFabExpandedChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val haptics = rememberExpressiveHaptics()
+    val gridState = rememberLazyGridState()
+    val isAtTop by remember {
+        derivedStateOf {
+            gridState.firstVisibleItemIndex == 0 && gridState.firstVisibleItemScrollOffset < 120
+        }
+    }
+    LaunchedEffect(isAtTop) {
+        onFabExpandedChange(isAtTop)
+    }
+
     val activeItems = data.workItems.filter { it.statusEnum != WorkStatus.DONE }
     val overdueItems = activeItems
         .filter { it.deadlineMillis in 1 until nowMillis }
@@ -80,6 +96,7 @@ fun ScheduleScreen(
     val totalPlannedMinutes = activeItems.sumOf { it.totalPomodoroMinutes }
 
     LazyVerticalGrid(
+        state = gridState,
         columns = GridCells.Adaptive(minSize = 330.dp),
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 96.dp),
@@ -90,8 +107,9 @@ fun ScheduleScreen(
             Card(
                 shape = RoundedCornerShape(28.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f)
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                 ),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(

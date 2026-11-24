@@ -1,15 +1,9 @@
 package com.example.ui.components
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -17,6 +11,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,7 +36,6 @@ import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.EventRepeat
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.MoreVert
-import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.NotificationsOff
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
@@ -74,10 +68,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.isSecondaryPressed
 import androidx.compose.ui.input.pointer.pointerInput
@@ -99,16 +93,49 @@ import com.example.data.WorkStatus
 import com.example.ui.DeadlineUrgency
 import com.example.ui.TimeFormatting
 import com.example.ui.theme.AmberContainer
-import com.example.ui.theme.ErrorContainerLight
-import com.example.ui.theme.ErrorRed
+import com.example.ui.theme.CountdownCondensedLargeStyle
+import com.example.ui.theme.CountdownCondensedMediumStyle
+import com.example.ui.theme.DarkAmberContainer
+import com.example.ui.theme.DarkMintContainer
+import com.example.ui.theme.DarkMintTertiary
+import com.example.ui.theme.DarkOnAmberContainer
+import com.example.ui.theme.DarkOnMintContainer
 import com.example.ui.theme.MintContainer
 import com.example.ui.theme.MintTertiary
 import com.example.ui.theme.MonoBadgeStyle
-import com.example.ui.theme.MonoTimerLargeStyle
-import com.example.ui.theme.MonoTimerMediumStyle
 import com.example.ui.theme.OnAmberContainer
-import com.example.ui.theme.OnErrorContainerLight
 import com.example.ui.theme.OnMintContainer
+
+/**
+ * Intercepts secondary (right-click) pointer events on [PointerEventPass.Initial] across Press, Move,
+ * and Release so synthesized click/tap detectors (e.g., `combinedClickable`) do NOT also treat a
+ * right-click (such as screen-cast Link to Windows mouse forwarding) as a primary card tap.
+ */
+fun Modifier.consumeSecondaryClickForContextMenu(
+    onSecondaryClick: () -> Unit
+): Modifier = composed {
+    pointerInput(onSecondaryClick) {
+        awaitPointerEventScope {
+            var secondaryActive = false
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                when {
+                    event.type == PointerEventType.Press && event.buttons.isSecondaryPressed -> {
+                        secondaryActive = true
+                        event.changes.forEach { it.consume() }
+                        onSecondaryClick()
+                    }
+                    secondaryActive -> {
+                        event.changes.forEach { it.consume() }
+                        if (!event.changes.any { it.pressed }) {
+                            secondaryActive = false
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 @OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -129,6 +156,7 @@ fun LiveSessionHeroCard(
     modifier: Modifier = Modifier
 ) {
     val haptics = rememberExpressiveHaptics()
+    val darkTheme = isSystemInDarkTheme()
     val isRunning = item.statusEnum == WorkStatus.IN_PROGRESS
     val snap = item.computePomodoroSnapshot(nowMillis)
     val isBreak = snap.currentPhase == PomodoroPhase.BREAK
@@ -140,36 +168,27 @@ fun LiveSessionHeroCard(
         label = "live_phase_progress"
     )
 
-    val infiniteTransition = rememberInfiniteTransition(label = "pulse_ring")
-    val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = if (isRunning) 1.12f else 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(900, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "pulse_scale"
-    )
-
-    val accentColor = if (isBreak) {
-        MintTertiary
+    val mintTone = if (darkTheme) DarkMintTertiary else MintTertiary
+    val workAccentColor = project?.accent?.vibrantColor(darkTheme) ?: MaterialTheme.colorScheme.primary
+    val accentColor = if (isBreak) mintTone else workAccentColor
+    val onAccentColor = if (isBreak) {
+        if (darkTheme) Color(0xFF003823) else Color.White
     } else {
-        project?.accent?.solid ?: MaterialTheme.colorScheme.primary
+        project?.accent?.onVibrantColor(darkTheme) ?: MaterialTheme.colorScheme.onPrimary
     }
-
-    val containerBrush = Brush.linearGradient(
-        colors = listOf(
-            accentColor.copy(alpha = if (isRunning) 0.22f else 0.12f),
-            MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.65f)
-        )
-    )
 
     Card(
         shape = RoundedCornerShape(32.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isRunning) {
+                MaterialTheme.colorScheme.surfaceContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceContainerLow
+            }
+        ),
         border = BorderStroke(
-            width = if (isRunning) 2.dp else 1.dp,
-            color = if (isRunning) accentColor else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+            width = if (isRunning) 1.5.dp else 1.dp,
+            color = if (isRunning) accentColor.copy(alpha = 0.75f) else MaterialTheme.colorScheme.outlineVariant
         ),
         modifier = modifier
             .fillMaxWidth()
@@ -177,9 +196,7 @@ fun LiveSessionHeroCard(
             .testTag("live_session_hero_card")
     ) {
         Column(
-            modifier = Modifier
-                .background(containerBrush)
-                .padding(if (compactMode) 16.dp else 20.dp),
+            modifier = Modifier.padding(if (compactMode) 16.dp else 20.dp),
             verticalArrangement = Arrangement.spacedBy(if (compactMode) 10.dp else 14.dp)
         ) {
             Row(
@@ -187,36 +204,24 @@ fun LiveSessionHeroCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(12.dp)
-                            .scale(pulseScale)
-                            .clip(CircleShape)
-                            .background(if (isRunning) accentColor else MaterialTheme.colorScheme.outline)
-                    )
-                    val phaseHeader = when {
-                        !isRunning && isBreak -> "BREAK ${snap.currentPeriodIndex} PAUSED"
-                        !isRunning -> "WORK ${snap.currentPeriodIndex} OF ${snap.totalWorkPeriods} • PAUSED"
-                        isBreak -> "BREAK ${snap.currentPeriodIndex} OF ${snap.totalBreakCount.coerceAtLeast(1L)}"
-                        else -> "WORK ${snap.currentPeriodIndex} OF ${snap.totalWorkPeriods}"
-                    }
-                    Text(
-                        text = phaseHeader,
-                        style = MaterialTheme.typography.labelLarge,
-                        color = if (isRunning) accentColor else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                val phaseHeader = when {
+                    !isRunning && isBreak -> "BREAK ${snap.currentPeriodIndex} PAUSED"
+                    !isRunning -> "WORK ${snap.currentPeriodIndex} OF ${snap.totalWorkPeriods} • PAUSED"
+                    isBreak -> "BREAK ${snap.currentPeriodIndex} OF ${snap.totalBreakCount.coerceAtLeast(1L)}"
+                    else -> "WORK ${snap.currentPeriodIndex} OF ${snap.totalWorkPeriods}"
                 }
+                Text(
+                    text = phaseHeader,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (isRunning) accentColor else MaterialTheme.colorScheme.onSurfaceVariant
+                )
 
-                if (!hasNotificationPermission || (isAndroid16OrAbove && !canPostPromotedLiveUpdates) || isRunning) {
+                // Only shown when notification alerts or Android 16 Live Updates promotion is turned off
+                if (!hasNotificationPermission || (isAndroid16OrAbove && !canPostPromotedLiveUpdates)) {
                     LiveUpdateStatusChip(
                         hasPermission = hasNotificationPermission,
                         canPostPromoted = canPostPromotedLiveUpdates,
                         isAndroid16OrAbove = isAndroid16OrAbove,
-                        isRunning = isRunning,
                         onRequestPermission = onRequestNotificationPermission,
                         onOpenSettings = onOpenLiveUpdateSettings
                     )
@@ -224,7 +229,7 @@ fun LiveSessionHeroCard(
             }
 
             if (compactMode) {
-                // Compact phone landscape header: Title on left, large countdown on right
+                // Compact phone landscape header: Title on left, tall condensed countdown on right
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -241,7 +246,7 @@ fun LiveSessionHeroCard(
                         }
                         Text(
                             text = item.title,
-                            style = MaterialTheme.typography.titleLarge,
+                            style = MaterialTheme.typography.headlineSmall,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -250,7 +255,7 @@ fun LiveSessionHeroCard(
                         Text(
                             text = if (snap.overtimeSeconds > 0L) "OVERTIME" else if (isBreak) "REST LEFT" else "PERIOD LEFT",
                             style = MaterialTheme.typography.labelSmall,
-                            color = if (snap.overtimeSeconds > 0L) ErrorRed else MaterialTheme.colorScheme.onSurfaceVariant
+                            color = if (snap.overtimeSeconds > 0L) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
                             text = if (snap.overtimeSeconds > 0L) {
@@ -258,13 +263,13 @@ fun LiveSessionHeroCard(
                             } else {
                                 TimeFormatting.formatDurationClock(snap.phaseRemainingSeconds)
                             },
-                            style = MonoTimerMediumStyle,
-                            color = if (snap.overtimeSeconds > 0L) ErrorRed else MaterialTheme.colorScheme.onSurface
+                            style = CountdownCondensedMediumStyle,
+                            color = if (snap.overtimeSeconds > 0L) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
                         )
                     }
                 }
             } else {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     if (project != null) {
                         ProjectAccentBadge(project = project)
                     }
@@ -289,7 +294,7 @@ fun LiveSessionHeroCard(
                                 else -> "WORK PERIOD REMAINING"
                             },
                             style = MaterialTheme.typography.labelSmall,
-                            color = if (snap.overtimeSeconds > 0L) ErrorRed else MaterialTheme.colorScheme.onSurfaceVariant
+                            color = if (snap.overtimeSeconds > 0L) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
                             text = if (snap.overtimeSeconds > 0L) {
@@ -297,8 +302,8 @@ fun LiveSessionHeroCard(
                             } else {
                                 TimeFormatting.formatDurationClock(snap.phaseRemainingSeconds)
                             },
-                            style = MonoTimerLargeStyle,
-                            color = if (snap.overtimeSeconds > 0L) ErrorRed else MaterialTheme.colorScheme.onSurface
+                            style = CountdownCondensedLargeStyle,
+                            color = if (snap.overtimeSeconds > 0L) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface
                         )
                     }
 
@@ -320,7 +325,7 @@ fun LiveSessionHeroCard(
             // Pomodoro period timeline strip (Work blocks vs Rest blocks)
             PomodoroTimelineStrip(
                 slots = snap.slots,
-                workAccent = project?.accent?.solid ?: MaterialTheme.colorScheme.primary
+                workAccent = workAccentColor
             )
 
             LinearWavyProgressIndicator(
@@ -328,8 +333,8 @@ fun LiveSessionHeroCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(14.dp),
-                color = if (snap.overtimeSeconds > 0L) ErrorRed else accentColor,
-                trackColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
+                color = if (snap.overtimeSeconds > 0L) MaterialTheme.colorScheme.error else accentColor,
+                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                 amplitude = { p -> if (isRunning && p > 0f && p < 1f) 1f else 0f }
             )
 
@@ -348,7 +353,7 @@ fun LiveSessionHeroCard(
                     interactionSource = toggleInteraction,
                     colors = ButtonDefaults.buttonColors(
                         containerColor = accentColor,
-                        contentColor = Color.White
+                        contentColor = onAccentColor
                     ),
                     modifier = Modifier
                         .height(48.dp)
@@ -427,6 +432,9 @@ fun PomodoroTimelineStrip(
     modifier: Modifier = Modifier
 ) {
     if (slots.isEmpty()) return
+    val darkTheme = isSystemInDarkTheme()
+    val breakActive = if (darkTheme) DarkMintTertiary else MintTertiary
+    val breakUpcoming = if (darkTheme) DarkMintContainer else MintContainer
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(5.dp),
@@ -435,9 +443,9 @@ fun PomodoroTimelineStrip(
         slots.forEach { slot ->
             val weightVal = slot.durationMinutes.toFloat().coerceAtLeast(3f)
             val color = when {
-                slot.isBreak && slot.state == PomodoroSlotState.COMPLETED -> MintTertiary.copy(alpha = 0.5f)
-                slot.isBreak && slot.state == PomodoroSlotState.ACTIVE -> MintTertiary
-                slot.isBreak -> MintContainer
+                slot.isBreak && slot.state == PomodoroSlotState.COMPLETED -> breakActive.copy(alpha = 0.5f)
+                slot.isBreak && slot.state == PomodoroSlotState.ACTIVE -> breakActive
+                slot.isBreak -> breakUpcoming
                 slot.state == PomodoroSlotState.COMPLETED -> workAccent.copy(alpha = 0.55f)
                 slot.state == PomodoroSlotState.ACTIVE -> workAccent
                 else -> MaterialTheme.colorScheme.surfaceContainerHighest
@@ -459,28 +467,22 @@ fun LiveUpdateStatusChip(
     hasPermission: Boolean,
     canPostPromoted: Boolean,
     isAndroid16OrAbove: Boolean,
-    isRunning: Boolean,
     onRequestPermission: () -> Unit,
     onOpenSettings: () -> Unit
 ) {
+    val darkTheme = isSystemInDarkTheme()
     val (bg, fg, label, icon) = when {
         !hasPermission -> listOf(
-            ErrorContainerLight,
-            OnErrorContainerLight,
+            MaterialTheme.colorScheme.errorContainer,
+            MaterialTheme.colorScheme.onErrorContainer,
             "Enable Live Alerts",
             Icons.Rounded.NotificationsOff
         )
         isAndroid16OrAbove && !canPostPromoted -> listOf(
-            AmberContainer,
-            OnAmberContainer,
+            if (darkTheme) DarkAmberContainer else AmberContainer,
+            if (darkTheme) DarkOnAmberContainer else OnAmberContainer,
             "Allow Live Updates",
             Icons.Rounded.Settings
-        )
-        isRunning -> listOf(
-            MintContainer,
-            OnMintContainer,
-            "Live Update On",
-            Icons.Rounded.NotificationsActive
         )
         else -> return
     }
@@ -536,14 +538,16 @@ fun WorkItemExpressiveCard(
     modifier: Modifier = Modifier
 ) {
     val haptics = rememberExpressiveHaptics()
+    val darkTheme = isSystemInDarkTheme()
     val isDone = item.statusEnum == WorkStatus.DONE
     val isRunning = item.statusEnum == WorkStatus.IN_PROGRESS
     val snap = item.computePomodoroSnapshot(nowMillis)
     val isBreak = snap.currentPhase == PomodoroPhase.BREAK
+    val mintTone = if (darkTheme) DarkMintTertiary else MintTertiary
     val accent = if (isRunning && isBreak) {
-        MintTertiary
+        mintTone
     } else {
-        project?.accent?.solid ?: MaterialTheme.colorScheme.primary
+        project?.accent?.vibrantColor(darkTheme) ?: MaterialTheme.colorScheme.primary
     }
 
     val progress by animateFloatAsState(
@@ -553,8 +557,8 @@ fun WorkItemExpressiveCard(
     )
     val cardColor by animateColorAsState(
         targetValue = when {
-            isRunning -> accent.copy(alpha = 0.12f)
-            isDone -> MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.72f)
+            isRunning -> MaterialTheme.colorScheme.surfaceContainer
+            isDone -> MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.78f)
             else -> MaterialTheme.colorScheme.surfaceContainerLow
         },
         label = "card_bg"
@@ -562,40 +566,32 @@ fun WorkItemExpressiveCard(
 
     var showContextMenu by remember { mutableStateOf(false) }
 
-    Box(modifier = modifier.fillMaxWidth()) {
-        Card(
-            shape = RoundedCornerShape(26.dp),
-            colors = CardDefaults.cardColors(containerColor = cardColor),
-            border = BorderStroke(
-                width = if (isRunning) 2.dp else 1.dp,
-                color = if (isRunning) accent else MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
-            ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(26.dp))
-                .combinedClickable(
-                    onClick = {
-                        haptics.select()
-                        onClick()
-                    },
-                    onLongClick = {
-                        haptics.thud()
-                        showContextMenu = true
-                    }
-                )
-                .pointerInput(Unit) {
-                    awaitPointerEventScope {
-                        while (true) {
-                            val event = awaitPointerEvent()
-                            if (event.type == PointerEventType.Press && event.buttons.isSecondaryPressed) {
-                                haptics.thud()
-                                showContextMenu = true
-                            }
-                        }
-                    }
+    Card(
+        shape = RoundedCornerShape(26.dp),
+        colors = CardDefaults.cardColors(containerColor = cardColor),
+        border = BorderStroke(
+            width = if (isRunning) 1.5.dp else 1.dp,
+            color = if (isRunning) accent.copy(alpha = 0.8f) else MaterialTheme.colorScheme.outlineVariant
+        ),
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(26.dp))
+            .consumeSecondaryClickForContextMenu {
+                haptics.thud()
+                showContextMenu = true
+            }
+            .combinedClickable(
+                onClick = {
+                    haptics.select()
+                    onClick()
+                },
+                onLongClick = {
+                    haptics.thud()
+                    showContextMenu = true
                 }
-                .testTag("work_item_card_${item.id}")
-        ) {
+            )
+            .testTag("work_item_card_${item.id}")
+    ) {
             Column(
                 modifier = Modifier.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -680,20 +676,137 @@ fun WorkItemExpressiveCard(
                             }
                         }
 
-                        IconButton(
-                            onClick = {
-                                haptics.select()
-                                showContextMenu = true
-                            },
-                            modifier = Modifier
-                                .size(48.dp)
-                                .testTag("work_item_menu_${item.id}")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.MoreVert,
-                                contentDescription = "More options for ${item.title}",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                        Box {
+                            IconButton(
+                                onClick = {
+                                    haptics.select()
+                                    showContextMenu = true
+                                },
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .testTag("work_item_menu_${item.id}")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.MoreVert,
+                                    contentDescription = "More options for ${item.title}",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+
+                            DropdownMenu(
+                                expanded = showContextMenu,
+                                onDismissRequest = { showContextMenu = false }
+                            ) {
+                                if (!isDone) {
+                                    DropdownMenuItem(
+                                        text = { Text(if (isRunning) "Pause Pomodoro" else "Start Work Period") },
+                                        leadingIcon = {
+                                            Icon(
+                                                if (isRunning) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                                                contentDescription = null
+                                            )
+                                        },
+                                        onClick = {
+                                            showContextMenu = false
+                                            haptics.confirm()
+                                            onStartOrPause()
+                                        }
+                                    )
+                                    if (onAdvancePhase != null && snap.nextSlot != null) {
+                                        DropdownMenuItem(
+                                            text = { Text(if (isBreak) "Skip Break" else "Next Pomodoro Period") },
+                                            leadingIcon = { Icon(Icons.Rounded.SkipNext, contentDescription = null) },
+                                            onClick = {
+                                                showContextMenu = false
+                                                haptics.select()
+                                                onAdvancePhase()
+                                            }
+                                        )
+                                    }
+                                    DropdownMenuItem(
+                                        text = { Text("Mark Completed") },
+                                        leadingIcon = { Icon(Icons.Rounded.CheckCircle, contentDescription = null) },
+                                        onClick = {
+                                            showContextMenu = false
+                                            haptics.confirm()
+                                            onToggleComplete()
+                                        }
+                                    )
+                                } else {
+                                    DropdownMenuItem(
+                                        text = { Text("Reopen Work Item") },
+                                        leadingIcon = { Icon(Icons.Rounded.Refresh, contentDescription = null) },
+                                        onClick = {
+                                            showContextMenu = false
+                                            haptics.select()
+                                            onToggleComplete()
+                                        }
+                                    )
+                                }
+
+                                DropdownMenuItem(
+                                    text = { Text("View Details") },
+                                    leadingIcon = { Icon(Icons.Rounded.Info, contentDescription = null) },
+                                    onClick = {
+                                        showContextMenu = false
+                                        onClick()
+                                    }
+                                )
+
+                                if (onEdit != null && !isDone) {
+                                    DropdownMenuItem(
+                                        text = { Text("Edit") },
+                                        leadingIcon = { Icon(Icons.Rounded.Edit, contentDescription = null) },
+                                        onClick = {
+                                            showContextMenu = false
+                                            onEdit()
+                                        }
+                                    )
+                                }
+
+                                if (onPostpone != null && !isDone) {
+                                    DropdownMenuItem(
+                                        text = { Text("Postpone +1 Day") },
+                                        leadingIcon = { Icon(Icons.Rounded.EventRepeat, contentDescription = null) },
+                                        onClick = {
+                                            showContextMenu = false
+                                            haptics.select()
+                                            onPostpone()
+                                        }
+                                    )
+                                }
+
+                                if (onDuplicate != null) {
+                                    DropdownMenuItem(
+                                        text = { Text("Duplicate") },
+                                        leadingIcon = { Icon(Icons.Rounded.ContentCopy, contentDescription = null) },
+                                        onClick = {
+                                            showContextMenu = false
+                                            haptics.select()
+                                            onDuplicate()
+                                        }
+                                    )
+                                }
+
+                                if (onDelete != null) {
+                                    HorizontalDivider()
+                                    DropdownMenuItem(
+                                        text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                                        leadingIcon = {
+                                            Icon(
+                                                Icons.Rounded.Delete,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.error
+                                            )
+                                        },
+                                        onClick = {
+                                            showContextMenu = false
+                                            haptics.reject()
+                                            onDelete()
+                                        }
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -735,8 +848,8 @@ fun WorkItemExpressiveCard(
                     if (item.priorityEnum == WorkPriority.HIGH && !isDone) {
                         Surface(
                             shape = RoundedCornerShape(50),
-                            color = ErrorContainerLight,
-                            contentColor = OnErrorContainerLight
+                            color = MaterialTheme.colorScheme.errorContainer,
+                            contentColor = MaterialTheme.colorScheme.onErrorContainer
                         ) {
                             Text(
                                 text = "Urgent",
@@ -752,136 +865,21 @@ fun WorkItemExpressiveCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(10.dp),
-                    color = if (isDone) MintTertiary else accent,
+                    color = if (isDone) mintTone else accent,
                     trackColor = MaterialTheme.colorScheme.surfaceContainerHigh,
                     amplitude = { p -> if (isRunning && p > 0f && p < 1f) 1f else 0f }
                 )
             }
         }
-
-        DropdownMenu(
-            expanded = showContextMenu,
-            onDismissRequest = { showContextMenu = false }
-        ) {
-            if (!isDone) {
-                DropdownMenuItem(
-                    text = { Text(if (isRunning) "Pause Pomodoro" else "Start Work Period") },
-                    leadingIcon = {
-                        Icon(
-                            if (isRunning) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                            contentDescription = null
-                        )
-                    },
-                    onClick = {
-                        showContextMenu = false
-                        haptics.confirm()
-                        onStartOrPause()
-                    }
-                )
-                if (onAdvancePhase != null && snap.nextSlot != null) {
-                    DropdownMenuItem(
-                        text = { Text(if (isBreak) "Skip Break" else "Next Pomodoro Period") },
-                        leadingIcon = { Icon(Icons.Rounded.SkipNext, contentDescription = null) },
-                        onClick = {
-                            showContextMenu = false
-                            haptics.select()
-                            onAdvancePhase()
-                        }
-                    )
-                }
-                DropdownMenuItem(
-                    text = { Text("Mark Completed") },
-                    leadingIcon = { Icon(Icons.Rounded.CheckCircle, contentDescription = null) },
-                    onClick = {
-                        showContextMenu = false
-                        haptics.confirm()
-                        onToggleComplete()
-                    }
-                )
-            } else {
-                DropdownMenuItem(
-                    text = { Text("Reopen Work Item") },
-                    leadingIcon = { Icon(Icons.Rounded.Refresh, contentDescription = null) },
-                    onClick = {
-                        showContextMenu = false
-                        haptics.select()
-                        onToggleComplete()
-                    }
-                )
-            }
-
-            DropdownMenuItem(
-                text = { Text("View Details") },
-                leadingIcon = { Icon(Icons.Rounded.Info, contentDescription = null) },
-                onClick = {
-                    showContextMenu = false
-                    onClick()
-                }
-            )
-
-            if (onEdit != null && !isDone) {
-                DropdownMenuItem(
-                    text = { Text("Edit") },
-                    leadingIcon = { Icon(Icons.Rounded.Edit, contentDescription = null) },
-                    onClick = {
-                        showContextMenu = false
-                        onEdit()
-                    }
-                )
-            }
-
-            if (onPostpone != null && !isDone) {
-                DropdownMenuItem(
-                    text = { Text("Postpone +1 Day") },
-                    leadingIcon = { Icon(Icons.Rounded.EventRepeat, contentDescription = null) },
-                    onClick = {
-                        showContextMenu = false
-                        haptics.select()
-                        onPostpone()
-                    }
-                )
-            }
-
-            if (onDuplicate != null) {
-                DropdownMenuItem(
-                    text = { Text("Duplicate") },
-                    leadingIcon = { Icon(Icons.Rounded.ContentCopy, contentDescription = null) },
-                    onClick = {
-                        showContextMenu = false
-                        haptics.select()
-                        onDuplicate()
-                    }
-                )
-            }
-
-            if (onDelete != null) {
-                HorizontalDivider()
-                DropdownMenuItem(
-                    text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
-                    leadingIcon = {
-                        Icon(
-                            Icons.Rounded.Delete,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.error
-                        )
-                    },
-                    onClick = {
-                        showContextMenu = false
-                        haptics.reject()
-                        onDelete()
-                    }
-                )
-            }
-        }
-    }
 }
 
 @Composable
 fun ProjectAccentBadge(project: Project) {
+    val darkTheme = isSystemInDarkTheme()
     Surface(
         shape = RoundedCornerShape(50),
-        color = project.accent.container,
-        contentColor = project.accent.onContainer
+        color = project.accent.badgeContainerColor(darkTheme),
+        contentColor = project.accent.badgeContentColor(darkTheme)
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
@@ -911,14 +909,15 @@ fun DeadlineBadge(
 ) {
     val display = TimeFormatting.formatDeadlineCountdown(deadlineMillis, nowMillis, isDone)
     if (display.urgency == DeadlineUrgency.NONE) return
+    val darkTheme = isSystemInDarkTheme()
 
     val (bg, fg) = when (display.urgency) {
-        DeadlineUrgency.OVERDUE -> ErrorContainerLight to OnErrorContainerLight
-        DeadlineUrgency.CRITICAL -> AmberContainer to OnAmberContainer
+        DeadlineUrgency.OVERDUE -> MaterialTheme.colorScheme.errorContainer to MaterialTheme.colorScheme.onErrorContainer
+        DeadlineUrgency.CRITICAL -> (if (darkTheme) DarkAmberContainer else AmberContainer) to (if (darkTheme) DarkOnAmberContainer else OnAmberContainer)
         DeadlineUrgency.SOON -> MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
         DeadlineUrgency.UPCOMING -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
         DeadlineUrgency.COMFORTABLE -> MaterialTheme.colorScheme.surfaceContainerHigh to MaterialTheme.colorScheme.onSurfaceVariant
-        DeadlineUrgency.DONE -> MintContainer to OnMintContainer
+        DeadlineUrgency.DONE -> (if (darkTheme) DarkMintContainer else MintContainer) to (if (darkTheme) DarkOnMintContainer else OnMintContainer)
         DeadlineUrgency.NONE -> MaterialTheme.colorScheme.surfaceContainerHigh to MaterialTheme.colorScheme.onSurfaceVariant
     }
 

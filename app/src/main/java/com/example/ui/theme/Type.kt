@@ -4,6 +4,7 @@ import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import com.example.R
@@ -12,6 +13,20 @@ val FrauncesDisplayFamily = FontFamily(
     Font(R.font.fraunces, FontWeight.SemiBold),
     Font(R.font.fraunces, FontWeight.Bold),
     Font(R.font.fraunces, FontWeight.ExtraBold)
+)
+
+// High-contrast editorial italic serif inspired by Material 3 Expressive hero typography
+val EditorialItalicFamily = FontFamily(
+    Font(R.font.fraunces, FontWeight.SemiBold, FontStyle.Italic),
+    Font(R.font.fraunces, FontWeight.Bold, FontStyle.Italic),
+    Font(R.font.fraunces, FontWeight.ExtraBold, FontStyle.Italic)
+)
+
+// Tall ultra-condensed display numerals inspired by Material 3 Expressive clock cards
+val AntonioCondensedFamily = FontFamily(
+    Font(R.font.antonio, FontWeight.Normal),
+    Font(R.font.antonio, FontWeight.Medium),
+    Font(R.font.antonio, FontWeight.Bold)
 )
 
 val FredokaPlayfulFamily = FontFamily(
@@ -32,17 +47,26 @@ val JetBrainsMonoFamily = FontFamily(
     Font(R.font.jetbrains_mono, FontWeight.Bold)
 )
 
-val MonoTimerLargeStyle = TextStyle(
-    fontFamily = JetBrainsMonoFamily,
+val CountdownCondensedLargeStyle = TextStyle(
+    fontFamily = AntonioCondensedFamily,
     fontWeight = FontWeight.Bold,
-    fontSize = 36.sp,
-    lineHeight = 42.sp,
+    fontSize = 54.sp,
+    lineHeight = 58.sp,
     letterSpacing = (-0.5).sp,
     fontFeatureSettings = "tnum"
 )
 
-val MonoTimerMediumStyle = TextStyle(
-    fontFamily = JetBrainsMonoFamily,
+val CountdownCondensedMediumStyle = TextStyle(
+    fontFamily = AntonioCondensedFamily,
+    fontWeight = FontWeight.Bold,
+    fontSize = 36.sp,
+    lineHeight = 40.sp,
+    letterSpacing = (-0.3).sp,
+    fontFeatureSettings = "tnum"
+)
+
+val CondensedStatStyle = TextStyle(
+    fontFamily = AntonioCondensedFamily,
     fontWeight = FontWeight.Bold,
     fontSize = 24.sp,
     lineHeight = 28.sp,
@@ -59,38 +83,44 @@ val MonoBadgeStyle = TextStyle(
 
 val TaskPulseTypography = Typography(
     displayLarge = TextStyle(
-        fontFamily = FrauncesDisplayFamily,
+        fontFamily = EditorialItalicFamily,
         fontWeight = FontWeight.ExtraBold,
-        fontSize = 42.sp,
-        lineHeight = 48.sp,
+        fontStyle = FontStyle.Italic,
+        fontSize = 44.sp,
+        lineHeight = 50.sp,
         letterSpacing = (-0.8).sp
     ),
     displaySmall = TextStyle(
-        fontFamily = FrauncesDisplayFamily,
+        fontFamily = EditorialItalicFamily,
         fontWeight = FontWeight.Bold,
-        fontSize = 32.sp,
-        lineHeight = 38.sp,
+        fontStyle = FontStyle.Italic,
+        fontSize = 34.sp,
+        lineHeight = 40.sp,
         letterSpacing = (-0.5).sp
     ),
     headlineLarge = TextStyle(
-        fontFamily = FrauncesDisplayFamily,
+        fontFamily = EditorialItalicFamily,
         fontWeight = FontWeight.Bold,
-        fontSize = 28.sp,
-        lineHeight = 34.sp,
+        fontStyle = FontStyle.Italic,
+        fontSize = 30.sp,
+        lineHeight = 36.sp,
         letterSpacing = (-0.4).sp
     ),
     headlineMedium = TextStyle(
-        fontFamily = FredokaPlayfulFamily,
+        fontFamily = EditorialItalicFamily,
         fontWeight = FontWeight.Bold,
-        fontSize = 25.sp,
-        lineHeight = 31.sp,
-        letterSpacing = (-0.2).sp
+        fontStyle = FontStyle.Italic,
+        fontSize = 27.sp,
+        lineHeight = 33.sp,
+        letterSpacing = (-0.3).sp
     ),
     headlineSmall = TextStyle(
-        fontFamily = FredokaPlayfulFamily,
+        fontFamily = EditorialItalicFamily,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 21.sp,
-        lineHeight = 27.sp
+        fontStyle = FontStyle.Italic,
+        fontSize = 23.sp,
+        lineHeight = 29.sp,
+        letterSpacing = (-0.2).sp
     ),
     titleLarge = TextStyle(
         fontFamily = FredokaPlayfulFamily,

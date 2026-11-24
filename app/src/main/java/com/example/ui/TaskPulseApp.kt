@@ -31,10 +31,13 @@ import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.CalendarMonth
+import androidx.compose.material.icons.rounded.DeleteForever
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.NotificationsActive
 import androidx.compose.material.icons.rounded.Timer
+import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ContainedLoadingIndicator
@@ -45,6 +48,7 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -179,6 +183,7 @@ private fun AuthenticatedTaskPulse(user: FirebaseUser) {
     }
 
     var currentDestination by rememberSaveable { mutableStateOf(PulseDestination.FOCUS) }
+    var isFabExpanded by remember(currentDestination) { mutableStateOf(true) }
     var showProjectEditor by remember { mutableStateOf(false) }
     var editingProject by remember { mutableStateOf<Project?>(null) }
 
@@ -187,6 +192,7 @@ private fun AuthenticatedTaskPulse(user: FirebaseUser) {
     var defaultProjectIdForNewItem by remember { mutableStateOf<String?>(null) }
 
     var inspectingWorkItemId by remember { mutableStateOf<String?>(null) }
+    var pendingDeleteWorkItem by remember { mutableStateOf<WorkItem?>(null) }
     var showAccountDialog by remember { mutableStateOf(false) }
 
     var hasNotificationPermission by remember {
@@ -286,14 +292,21 @@ private fun AuthenticatedTaskPulse(user: FirebaseUser) {
         showWorkItemEditor = true
     }
 
+    // TopAppBar handles Top + Cutout insets; Scaffold content insets cover remaining uncovered sides.
     val contentWindowInsets = if (useNavRail) {
         WindowInsets.safeDrawing.only(
-            WindowInsetsSides.Top + WindowInsetsSides.End + WindowInsetsSides.Bottom
+            WindowInsetsSides.End + WindowInsetsSides.Bottom
         )
     } else {
         WindowInsets.safeDrawing.only(
-            WindowInsetsSides.Top + WindowInsetsSides.Horizontal
+            WindowInsetsSides.Horizontal
         )
+    }
+
+    val topBarWindowInsets = if (useNavRail) {
+        WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.End)
+    } else {
+        TopAppBarDefaults.windowInsets
     }
 
     NavigationSuiteScaffoldLayout(
@@ -344,7 +357,7 @@ private fun AuthenticatedTaskPulse(user: FirebaseUser) {
             snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 CenterAlignedTopAppBar(
-                    windowInsets = WindowInsets(0, 0, 0, 0),
+                    windowInsets = topBarWindowInsets,
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.background
                     ),
@@ -416,11 +429,12 @@ private fun AuthenticatedTaskPulse(user: FirebaseUser) {
                                 showWorkItemEditor = true
                             }
                         },
+                        expanded = isFabExpanded,
                         interactionSource = fabInteraction,
                         shape = RoundedCornerShape(24.dp),
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary,
-                        icon = { Icon(Icons.Rounded.Add, contentDescription = null) },
+                        icon = { Icon(Icons.Rounded.Add, contentDescription = if (hasProjects) "Add Work Item" else "New Project") },
                         text = {
                             Text(
                                 text = if (hasProjects) "Work Item" else "New Project",
@@ -490,7 +504,7 @@ private fun AuthenticatedTaskPulse(user: FirebaseUser) {
                                 onEditItem = openEditWorkItem,
                                 onPostponeItem = { viewModel.postponeWorkItem(it) },
                                 onDuplicateItem = { viewModel.duplicateWorkItem(it) },
-                                onDeleteItem = { viewModel.deleteWorkItem(it) },
+                                onDeleteItem = { pendingDeleteWorkItem = it },
                                 onCreateWorkItem = {
                                     editingWorkItem = null
                                     defaultProjectIdForNewItem = data.projects.firstOrNull()?.id
@@ -499,7 +513,8 @@ private fun AuthenticatedTaskPulse(user: FirebaseUser) {
                                 onCreateProject = {
                                     editingProject = null
                                     showProjectEditor = true
-                                }
+                                },
+                                onFabExpandedChange = { isFabExpanded = it }
                             )
 
                             PulseDestination.PROJECTS -> ProjectsScreen(
@@ -529,7 +544,8 @@ private fun AuthenticatedTaskPulse(user: FirebaseUser) {
                                 onEditItem = openEditWorkItem,
                                 onPostponeItem = { viewModel.postponeWorkItem(it) },
                                 onDuplicateItem = { viewModel.duplicateWorkItem(it) },
-                                onDeleteItem = { viewModel.deleteWorkItem(it) }
+                                onDeleteItem = { pendingDeleteWorkItem = it },
+                                onFabExpandedChange = { isFabExpanded = it }
                             )
 
                             PulseDestination.SCHEDULE -> ScheduleScreen(
@@ -543,7 +559,7 @@ private fun AuthenticatedTaskPulse(user: FirebaseUser) {
                                 onEditItem = openEditWorkItem,
                                 onPostponeItem = { viewModel.postponeWorkItem(it) },
                                 onDuplicateItem = { viewModel.duplicateWorkItem(it) },
-                                onDeleteItem = { viewModel.deleteWorkItem(it) },
+                                onDeleteItem = { pendingDeleteWorkItem = it },
                                 onAddWorkItem = {
                                     editingWorkItem = null
                                     defaultProjectIdForNewItem = data.projects.firstOrNull()?.id
@@ -552,7 +568,8 @@ private fun AuthenticatedTaskPulse(user: FirebaseUser) {
                                 onCreateProject = {
                                     editingProject = null
                                     showProjectEditor = true
-                                }
+                                },
+                                onFabExpandedChange = { isFabExpanded = it }
                             )
                         }
                     }
@@ -630,8 +647,23 @@ private fun AuthenticatedTaskPulse(user: FirebaseUser) {
                 showWorkItemEditor = true
             },
             onDelete = {
-                viewModel.deleteWorkItem(inspectedItem)
-                inspectingWorkItemId = null
+                pendingDeleteWorkItem = inspectedItem
+            }
+        )
+    }
+
+    pendingDeleteWorkItem?.let { itemToDelete ->
+        val projectName = successData?.projectNameFor(itemToDelete.projectId).orEmpty()
+        DeleteWorkItemExpressiveDialog(
+            item = itemToDelete,
+            projectName = projectName,
+            onDismiss = { pendingDeleteWorkItem = null },
+            onConfirmDelete = {
+                viewModel.deleteWorkItem(itemToDelete)
+                if (inspectingWorkItemId == itemToDelete.id) {
+                    inspectingWorkItemId = null
+                }
+                pendingDeleteWorkItem = null
             }
         )
     }
@@ -702,4 +734,105 @@ private fun AuthenticatedTaskPulse(user: FirebaseUser) {
             }
         )
     }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun DeleteWorkItemExpressiveDialog(
+    item: WorkItem,
+    projectName: String,
+    onDismiss: () -> Unit,
+    onConfirmDelete: () -> Unit
+) {
+    val haptics = rememberExpressiveHaptics()
+    val isRunning = item.statusEnum == WorkStatus.IN_PROGRESS
+    val hasLoggedTime = item.elapsedSeconds > 0L || item.phaseElapsedSeconds > 0L
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(30.dp),
+        icon = {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.errorContainer,
+                contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                modifier = Modifier.size(56.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Rounded.DeleteForever,
+                        contentDescription = null,
+                        modifier = Modifier.size(30.dp)
+                    )
+                }
+            }
+        },
+        title = {
+            Text(
+                text = "Delete \"${item.title}\"?",
+                style = MaterialTheme.typography.headlineSmall
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                val contextLine = if (projectName.isNotBlank()) {
+                    "This work item under $projectName will be permanently removed from your schedule."
+                } else {
+                    "This work item will be permanently removed from your schedule."
+                }
+                Text(
+                    text = contextLine,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (isRunning || hasLoggedTime) {
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.55f),
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Icon(Icons.Rounded.Warning, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Text(
+                                text = if (isRunning) {
+                                    "An active Pomodoro session is currently running on this item and will stop."
+                                } else {
+                                    "${TimeFormatting.formatDurationClock(item.elapsedSeconds)} of focused Pomodoro time will be removed."
+                                },
+                                style = MaterialTheme.typography.labelLarge
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    haptics.reject()
+                    onConfirmDelete()
+                },
+                shapes = ButtonDefaults.shapes(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.error,
+                    contentColor = MaterialTheme.colorScheme.onError
+                ),
+                modifier = Modifier.testTag("confirm_delete_work_item_button")
+            ) {
+                Text("Delete Work Item")
+            }
+        },
+        dismissButton = {
+            OutlinedButton(
+                onClick = onDismiss,
+                shapes = ButtonDefaults.shapes()
+            ) {
+                Text("Keep Item")
+            }
+        }
+    )
 }

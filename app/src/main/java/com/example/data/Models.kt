@@ -1,6 +1,7 @@
 package com.example.data
 
 import androidx.annotation.Keep
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.rounded.Bolt
@@ -8,6 +9,7 @@ import androidx.compose.material.icons.rounded.Code
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Palette
 import androidx.compose.material.icons.rounded.RocketLaunch
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.example.ui.theme.AmberContainer
@@ -16,6 +18,24 @@ import com.example.ui.theme.BerryAccent
 import com.example.ui.theme.BerryContainer
 import com.example.ui.theme.CoralContainer
 import com.example.ui.theme.CoralPrimary
+import com.example.ui.theme.DarkAmberContainer
+import com.example.ui.theme.DarkAmberUrgent
+import com.example.ui.theme.DarkBerryAccent
+import com.example.ui.theme.DarkBerryContainer
+import com.example.ui.theme.DarkCoralContainer
+import com.example.ui.theme.DarkCoralPrimary
+import com.example.ui.theme.DarkIndigoContainer
+import com.example.ui.theme.DarkIndigoSecondary
+import com.example.ui.theme.DarkMintContainer
+import com.example.ui.theme.DarkMintTertiary
+import com.example.ui.theme.DarkOnAmberContainer
+import com.example.ui.theme.DarkOnBerryContainer
+import com.example.ui.theme.DarkOnCoralContainer
+import com.example.ui.theme.DarkOnIndigoContainer
+import com.example.ui.theme.DarkOnMintContainer
+import com.example.ui.theme.DarkOnSkyContainer
+import com.example.ui.theme.DarkSkyAccent
+import com.example.ui.theme.DarkSkyContainer
 import com.example.ui.theme.IndigoContainer
 import com.example.ui.theme.IndigoSecondary
 import com.example.ui.theme.MintContainer
@@ -42,15 +62,82 @@ sealed interface UiState<out T> {
 enum class ProjectColor(
     val label: String,
     val solid: Color,
+    val darkAccent: Color,
     val container: Color,
-    val onContainer: Color
+    val onContainer: Color,
+    val darkContainer: Color,
+    val darkOnContainer: Color
 ) {
-    CORAL("Coral", CoralPrimary, CoralContainer, OnCoralContainer),
-    INDIGO("Indigo", IndigoSecondary, IndigoContainer, OnIndigoContainer),
-    MINT("Mint", MintTertiary, MintContainer, OnMintContainer),
-    AMBER("Amber", AmberUrgent, AmberContainer, OnAmberContainer),
-    BERRY("Berry", BerryAccent, BerryContainer, OnBerryContainer),
-    SKY("Sky", SkyAccent, SkyContainer, OnSkyContainer);
+    CORAL(
+        label = "Coral",
+        solid = CoralPrimary,
+        darkAccent = DarkCoralPrimary,
+        container = CoralContainer,
+        onContainer = OnCoralContainer,
+        darkContainer = DarkCoralContainer,
+        darkOnContainer = DarkOnCoralContainer
+    ),
+    INDIGO(
+        label = "Indigo",
+        solid = IndigoSecondary,
+        darkAccent = DarkIndigoSecondary,
+        container = IndigoContainer,
+        onContainer = OnIndigoContainer,
+        darkContainer = DarkIndigoContainer,
+        darkOnContainer = DarkOnIndigoContainer
+    ),
+    MINT(
+        label = "Mint",
+        solid = MintTertiary,
+        darkAccent = DarkMintTertiary,
+        container = MintContainer,
+        onContainer = OnMintContainer,
+        darkContainer = DarkMintContainer,
+        darkOnContainer = DarkOnMintContainer
+    ),
+    AMBER(
+        label = "Amber",
+        solid = AmberUrgent,
+        darkAccent = DarkAmberUrgent,
+        container = AmberContainer,
+        onContainer = OnAmberContainer,
+        darkContainer = DarkAmberContainer,
+        darkOnContainer = DarkOnAmberContainer
+    ),
+    BERRY(
+        label = "Berry",
+        solid = BerryAccent,
+        darkAccent = DarkBerryAccent,
+        container = BerryContainer,
+        onContainer = OnBerryContainer,
+        darkContainer = DarkBerryContainer,
+        darkOnContainer = DarkOnBerryContainer
+    ),
+    SKY(
+        label = "Sky",
+        solid = SkyAccent,
+        darkAccent = DarkSkyAccent,
+        container = SkyContainer,
+        onContainer = OnSkyContainer,
+        darkContainer = DarkSkyContainer,
+        darkOnContainer = DarkOnSkyContainer
+    );
+
+    @Composable
+    fun vibrantColor(darkTheme: Boolean = isSystemInDarkTheme()): Color =
+        if (darkTheme) darkAccent else solid
+
+    @Composable
+    fun onVibrantColor(darkTheme: Boolean = isSystemInDarkTheme()): Color =
+        if (darkTheme) Color(0xFF13111C) else Color.White
+
+    @Composable
+    fun badgeContainerColor(darkTheme: Boolean = isSystemInDarkTheme()): Color =
+        if (darkTheme) darkContainer else container
+
+    @Composable
+    fun badgeContentColor(darkTheme: Boolean = isSystemInDarkTheme()): Color =
+        if (darkTheme) darkOnContainer else onContainer
 
     companion object {
         fun safeValueOf(raw: String): ProjectColor =

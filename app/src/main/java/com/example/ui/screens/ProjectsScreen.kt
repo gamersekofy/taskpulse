@@ -1,20 +1,26 @@
 package com.example.ui.screens
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -23,6 +29,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -32,6 +39,7 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DeleteForever
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FolderOpen
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -53,25 +61,17 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
-import androidx.compose.material3.adaptive.layout.AnimatedPane
-import androidx.compose.material3.adaptive.layout.ListDetailPaneScaffoldRole
-import androidx.compose.material3.adaptive.navigation.BackNavigationBehavior
-import androidx.compose.material3.adaptive.navigation.NavigableListDetailPaneScaffold
-import androidx.compose.material3.adaptive.navigation.rememberListDetailPaneScaffoldNavigator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.PointerEventType
-import androidx.compose.ui.input.pointer.isSecondaryPressed
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -85,8 +85,9 @@ import com.example.ui.components.DeadlineBadge
 import com.example.ui.components.EmptyStateCard
 import com.example.ui.components.WorkItemExpressiveCard
 import com.example.ui.components.bouncyPressScale
+import com.example.ui.components.consumeSecondaryClickForContextMenu
 import com.example.ui.components.rememberExpressiveHaptics
-import kotlinx.coroutines.launch
+import com.example.ui.theme.CondensedStatStyle
 
 private enum class ProjectItemFilter(val label: String) {
     ALL("All"),
@@ -94,7 +95,6 @@ private enum class ProjectItemFilter(val label: String) {
     DONE("Completed")
 }
 
-@OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
 fun ProjectsScreen(
     data: DashboardData,
@@ -112,64 +112,68 @@ fun ProjectsScreen(
     onPostponeItem: (WorkItem) -> Unit,
     onDuplicateItem: (WorkItem) -> Unit,
     onDeleteItem: (WorkItem) -> Unit,
+    onFabExpandedChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val navigator = rememberListDetailPaneScaffoldNavigator<String>()
-    val scope = rememberCoroutineScope()
+    var selectedProjectId by rememberSaveable { mutableStateOf<String?>(null) }
+    var isDetailOpenOnPhone by rememberSaveable { mutableStateOf(false) }
 
-    val selectedId = navigator.currentDestination?.contentKey
-        ?: data.projectsWithStats.firstOrNull()?.project?.id
-    val selectedStats = data.projectsWithStats.firstOrNull { it.project.id == selectedId }
+    val selectedStats = data.projectsWithStats.firstOrNull { it.project.id == selectedProjectId }
         ?: data.projectsWithStats.firstOrNull()
 
-    NavigableListDetailPaneScaffold(
-        navigator = navigator,
-        modifier = modifier.fillMaxSize(),
-        listPane = {
-            AnimatedPane(
-                enterTransition = slideInHorizontally(animationSpec = tween(240)) { -it / 3 },
-                exitTransition = slideOutHorizontally(animationSpec = tween(240)) { -it / 3 }
+    // Close detail pane automatically if the inspected project was deleted
+    LaunchedEffect(data.projectsWithStats, selectedProjectId) {
+        if (selectedProjectId != null && data.projectsWithStats.none { it.project.id == selectedProjectId }) {
+            selectedProjectId = data.projectsWithStats.firstOrNull()?.project?.id
+            if (data.projectsWithStats.isEmpty()) {
+                isDetailOpenOnPhone = false
+            }
+        }
+    }
+
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        val isTwoPane = maxWidth >= 720.dp && maxHeight >= 520.dp
+
+        if (isTwoPane) {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Opaque Surface avoids any mid-transition ghosting/translucency over overlapping panes
                 Surface(
                     color = MaterialTheme.colorScheme.background,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier
+                        .weight(0.95f)
+                        .fillMaxHeight()
                 ) {
                     ProjectsListPane(
                         projectsWithStats = data.projectsWithStats,
                         selectedProjectId = selectedStats?.project?.id,
+                        highlightSelection = true,
                         nowMillis = nowMillis,
                         onSelectProject = { projectId ->
-                            scope.launch {
-                                navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, projectId)
-                            }
+                            selectedProjectId = projectId
                         },
                         onEditProject = onEditProject,
                         onDeleteProject = onDeleteProject,
                         onAddWorkItemForProject = onAddWorkItemForProject,
-                        onCreateProject = onCreateProject
+                        onCreateProject = onCreateProject,
+                        onFabExpandedChange = onFabExpandedChange
                     )
                 }
-            }
-        },
-        detailPane = {
-            AnimatedPane(
-                enterTransition = slideInHorizontally(animationSpec = tween(260)) { it },
-                exitTransition = slideOutHorizontally(animationSpec = tween(260)) { it }
-            ) {
+
                 Surface(
                     color = MaterialTheme.colorScheme.background,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier
+                        .weight(1.25f)
+                        .fillMaxHeight()
                 ) {
                     ProjectDetailPane(
                         stats = selectedStats,
                         nowMillis = nowMillis,
-                        canNavigateBack = navigator.canNavigateBack(),
-                        onBack = {
-                            scope.launch {
-                                navigator.navigateBack(BackNavigationBehavior.PopUntilScaffoldValueChange)
-                            }
-                        },
+                        canNavigateBack = false,
+                        onBack = {},
                         onEditProject = onEditProject,
                         onDeleteProject = onDeleteProject,
                         onAddWorkItem = onAddWorkItemForProject,
@@ -186,8 +190,79 @@ fun ProjectsScreen(
                     )
                 }
             }
+        } else {
+            val showingDetail = isDetailOpenOnPhone && selectedStats != null
+
+            BackHandler(enabled = showingDetail) {
+                isDetailOpenOnPhone = false
+            }
+
+            LaunchedEffect(showingDetail) {
+                onFabExpandedChange(true)
+            }
+
+            AnimatedContent(
+                targetState = showingDetail,
+                transitionSpec = {
+                    if (targetState) {
+                        (slideInHorizontally(animationSpec = tween(250)) { it })
+                            .togetherWith(slideOutHorizontally(animationSpec = tween(250)) { -it / 4 })
+                            .apply { targetContentZIndex = 1f }
+                    } else {
+                        (slideInHorizontally(animationSpec = tween(250)) { -it / 4 })
+                            .togetherWith(slideOutHorizontally(animationSpec = tween(250)) { it })
+                            .apply { targetContentZIndex = 0f }
+                    }
+                },
+                label = "projects_single_pane_transition",
+                modifier = Modifier.fillMaxSize()
+            ) { showDetail ->
+                Surface(
+                    color = MaterialTheme.colorScheme.background,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    if (showDetail) {
+                        ProjectDetailPane(
+                            stats = selectedStats,
+                            nowMillis = nowMillis,
+                            canNavigateBack = true,
+                            onBack = { isDetailOpenOnPhone = false },
+                            onEditProject = onEditProject,
+                            onDeleteProject = onDeleteProject,
+                            onAddWorkItem = onAddWorkItemForProject,
+                            onStartOrPauseItem = onStartOrPauseItem,
+                            onAdvancePhase = onAdvancePhase,
+                            onCompleteItem = onCompleteItem,
+                            onReopenItem = onReopenItem,
+                            onInspectItem = onInspectItem,
+                            onEditItem = onEditItem,
+                            onPostponeItem = onPostponeItem,
+                            onDuplicateItem = onDuplicateItem,
+                            onDeleteItem = onDeleteItem,
+                            onCreateProject = onCreateProject,
+                            onFabExpandedChange = onFabExpandedChange
+                        )
+                    } else {
+                        ProjectsListPane(
+                            projectsWithStats = data.projectsWithStats,
+                            selectedProjectId = selectedStats?.project?.id,
+                            highlightSelection = false,
+                            nowMillis = nowMillis,
+                            onSelectProject = { projectId ->
+                                selectedProjectId = projectId
+                                isDetailOpenOnPhone = true
+                            },
+                            onEditProject = onEditProject,
+                            onDeleteProject = onDeleteProject,
+                            onAddWorkItemForProject = onAddWorkItemForProject,
+                            onCreateProject = onCreateProject,
+                            onFabExpandedChange = onFabExpandedChange
+                        )
+                    }
+                }
+            }
         }
-    )
+    }
 }
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -195,17 +270,31 @@ fun ProjectsScreen(
 private fun ProjectsListPane(
     projectsWithStats: List<ProjectWithStats>,
     selectedProjectId: String?,
+    highlightSelection: Boolean,
     nowMillis: Long,
     onSelectProject: (String) -> Unit,
     onEditProject: (Project) -> Unit,
     onDeleteProject: (Project, List<WorkItem>) -> Unit,
     onAddWorkItemForProject: (String) -> Unit,
-    onCreateProject: () -> Unit
+    onCreateProject: () -> Unit,
+    onFabExpandedChange: (Boolean) -> Unit
 ) {
     val haptics = rememberExpressiveHaptics()
+    val darkTheme = isSystemInDarkTheme()
+    val listState = rememberLazyListState()
     var pendingDeleteStats by remember { mutableStateOf<ProjectWithStats?>(null) }
 
+    val isAtTop by remember {
+        derivedStateOf {
+            listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset < 120
+        }
+    }
+    LaunchedEffect(isAtTop) {
+        onFabExpandedChange(isAtTop)
+    }
+
     LazyColumn(
+        state = listState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 96.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -256,165 +345,187 @@ private fun ProjectsListPane(
         } else {
             items(projectsWithStats, key = { it.project.id }) { stats ->
                 val project = stats.project
-                val isSelected = project.id == selectedProjectId
+                val isSelected = highlightSelection && project.id == selectedProjectId
                 val accent = project.accent
+                val accentVibrant = accent.vibrantColor(darkTheme)
+                val accentOnVibrant = accent.onVibrantColor(darkTheme)
                 var showProjectMenu by remember { mutableStateOf(false) }
 
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    Card(
-                        shape = RoundedCornerShape(28.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (isSelected) {
-                                accent.container.copy(alpha = 0.55f)
-                            } else {
-                                MaterialTheme.colorScheme.surfaceContainerLow
+                Card(
+                    shape = RoundedCornerShape(28.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isSelected) {
+                            MaterialTheme.colorScheme.surfaceContainerHigh
+                        } else {
+                            MaterialTheme.colorScheme.surfaceContainerLow
+                        }
+                    ),
+                    border = BorderStroke(
+                        width = if (isSelected) 2.dp else 1.dp,
+                        color = if (isSelected) accentVibrant else MaterialTheme.colorScheme.outlineVariant
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(28.dp))
+                        .consumeSecondaryClickForContextMenu {
+                            haptics.thud()
+                            showProjectMenu = true
+                        }
+                        .combinedClickable(
+                            onClick = {
+                                haptics.select()
+                                onSelectProject(project.id)
+                            },
+                            onLongClick = {
+                                haptics.thud()
+                                showProjectMenu = true
                             }
-                        ),
-                        border = BorderStroke(
-                            width = if (isSelected) 2.dp else 1.dp,
-                            color = if (isSelected) accent.solid else MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
-                        ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(28.dp))
-                            .combinedClickable(
-                                onClick = {
-                                    haptics.select()
-                                    onSelectProject(project.id)
-                                },
-                                onLongClick = {
-                                    haptics.thud()
-                                    showProjectMenu = true
-                                }
-                            )
-                            .pointerInput(Unit) {
-                                awaitPointerEventScope {
-                                    while (true) {
-                                        val event = awaitPointerEvent()
-                                        if (event.type == PointerEventType.Press && event.buttons.isSecondaryPressed) {
-                                            haptics.thud()
-                                            showProjectMenu = true
-                                        }
-                                    }
-                                }
-                            }
-                            .testTag("project_card_${project.id}")
+                        )
+                        .testTag("project_card_${project.id}")
+                ) {
+                    Column(
+                        modifier = Modifier.padding(18.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Column(
-                            modifier = Modifier.padding(18.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                Row(
-                                    modifier = Modifier.weight(1f),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                Surface(
+                                    shape = CircleShape,
+                                    color = accentVibrant,
+                                    contentColor = accentOnVibrant,
+                                    modifier = Modifier.size(44.dp)
                                 ) {
-                                    Surface(
-                                        shape = CircleShape,
-                                        color = accent.container,
-                                        contentColor = accent.onContainer,
-                                        modifier = Modifier.size(44.dp)
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Icon(project.icon.vector, contentDescription = null)
-                                        }
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(project.icon.vector, contentDescription = null)
                                     }
-                                    Column {
-                                        Text(
-                                            text = project.name,
-                                            style = MaterialTheme.typography.titleLarge,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
+                                }
+                                Column {
+                                    Text(
+                                        text = project.name,
+                                        style = MaterialTheme.typography.titleLarge,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = "${stats.doneCount}/${stats.totalCount} items • ${TimeFormatting.formatMinutesCompact(stats.totalProjectedMinutes)} est.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Text(
+                                    text = "${(stats.completionFraction * 100).toInt()}%",
+                                    style = CondensedStatStyle,
+                                    color = accentVibrant
+                                )
+
+                                Box {
+                                    IconButton(
+                                        onClick = {
+                                            haptics.select()
+                                            showProjectMenu = true
+                                        },
+                                        modifier = Modifier
+                                            .size(48.dp)
+                                            .testTag("project_menu_${project.id}")
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.MoreVert,
+                                            contentDescription = "More options for ${project.name}",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
-                                        Text(
-                                            text = "${stats.doneCount}/${stats.totalCount} items • ${TimeFormatting.formatMinutesCompact(stats.totalProjectedMinutes)} est.",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    }
+
+                                    DropdownMenu(
+                                        expanded = showProjectMenu,
+                                        onDismissRequest = { showProjectMenu = false }
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text("Open Project") },
+                                            leadingIcon = { Icon(Icons.Rounded.FolderOpen, contentDescription = null) },
+                                            onClick = {
+                                                showProjectMenu = false
+                                                onSelectProject(project.id)
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Add Work Item") },
+                                            leadingIcon = { Icon(Icons.Rounded.Add, contentDescription = null) },
+                                            onClick = {
+                                                showProjectMenu = false
+                                                onAddWorkItemForProject(project.id)
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Edit Project") },
+                                            leadingIcon = { Icon(Icons.Rounded.Edit, contentDescription = null) },
+                                            onClick = {
+                                                showProjectMenu = false
+                                                onEditProject(project)
+                                            }
+                                        )
+                                        HorizontalDivider()
+                                        DropdownMenuItem(
+                                            text = { Text("Delete Project", color = MaterialTheme.colorScheme.error) },
+                                            leadingIcon = {
+                                                Icon(
+                                                    Icons.Rounded.Delete,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.error
+                                                )
+                                            },
+                                            onClick = {
+                                                showProjectMenu = false
+                                                haptics.reject()
+                                                pendingDeleteStats = stats
+                                            }
                                         )
                                     }
                                 }
-                                Text(
-                                    text = "${(stats.completionFraction * 100).toInt()}%",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = accent.solid
-                                )
-                            }
-
-                            if (project.description.isNotBlank()) {
-                                Text(
-                                    text = project.description,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-
-                            LinearWavyProgressIndicator(
-                                progress = { stats.completionFraction },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(10.dp),
-                                color = accent.solid,
-                                trackColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
-                                amplitude = { 0f }
-                            )
-
-                            if (project.deadlineMillis > 0L) {
-                                DeadlineBadge(
-                                    deadlineMillis = project.deadlineMillis,
-                                    nowMillis = nowMillis,
-                                    isDone = stats.totalCount > 0 && stats.doneCount == stats.totalCount
-                                )
                             }
                         }
-                    }
 
-                    DropdownMenu(
-                        expanded = showProjectMenu,
-                        onDismissRequest = { showProjectMenu = false }
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("Open Project") },
-                            leadingIcon = { Icon(Icons.Rounded.FolderOpen, contentDescription = null) },
-                            onClick = {
-                                showProjectMenu = false
-                                onSelectProject(project.id)
-                            }
+                        if (project.description.isNotBlank()) {
+                            Text(
+                                text = project.description,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
+                        LinearWavyProgressIndicator(
+                            progress = { stats.completionFraction },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(10.dp),
+                            color = accentVibrant,
+                            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                            amplitude = { 0f }
                         )
-                        DropdownMenuItem(
-                            text = { Text("Add Work Item") },
-                            leadingIcon = { Icon(Icons.Rounded.Add, contentDescription = null) },
-                            onClick = {
-                                showProjectMenu = false
-                                onAddWorkItemForProject(project.id)
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Edit Project") },
-                            leadingIcon = { Icon(Icons.Rounded.Edit, contentDescription = null) },
-                            onClick = {
-                                showProjectMenu = false
-                                onEditProject(project)
-                            }
-                        )
-                        HorizontalDivider()
-                        DropdownMenuItem(
-                            text = { Text("Delete Project", color = MaterialTheme.colorScheme.error) },
-                            leadingIcon = {
-                                Icon(Icons.Rounded.Delete, contentDescription = null, tint = MaterialTheme.colorScheme.error)
-                            },
-                            onClick = {
-                                showProjectMenu = false
-                                haptics.reject()
-                                pendingDeleteStats = stats
-                            }
-                        )
+
+                        if (project.deadlineMillis > 0L) {
+                            DeadlineBadge(
+                                deadlineMillis = project.deadlineMillis,
+                                nowMillis = nowMillis,
+                                isDone = stats.totalCount > 0 && stats.doneCount == stats.totalCount
+                            )
+                        }
                     }
                 }
             }
@@ -452,9 +563,11 @@ private fun ProjectDetailPane(
     onPostponeItem: (WorkItem) -> Unit,
     onDuplicateItem: (WorkItem) -> Unit,
     onDeleteItem: (WorkItem) -> Unit,
-    onCreateProject: () -> Unit
+    onCreateProject: () -> Unit,
+    onFabExpandedChange: ((Boolean) -> Unit)? = null
 ) {
     val haptics = rememberExpressiveHaptics()
+    val darkTheme = isSystemInDarkTheme()
 
     if (stats == null) {
         Box(
@@ -474,8 +587,22 @@ private fun ProjectDetailPane(
     }
 
     val project = stats.project
+    val accentVibrant = project.accent.vibrantColor(darkTheme)
+    val accentOnVibrant = project.accent.onVibrantColor(darkTheme)
     var filter by remember(project.id) { mutableStateOf(ProjectItemFilter.ALL) }
     var confirmDelete by remember { mutableStateOf(false) }
+
+    val detailListState = rememberLazyListState()
+    if (onFabExpandedChange != null) {
+        val isAtTop by remember {
+            derivedStateOf {
+                detailListState.firstVisibleItemIndex == 0 && detailListState.firstVisibleItemScrollOffset < 120
+            }
+        }
+        LaunchedEffect(isAtTop) {
+            onFabExpandedChange(isAtTop)
+        }
+    }
 
     val filteredItems = stats.items
         .filter { item ->
@@ -493,6 +620,7 @@ private fun ProjectDetailPane(
         )
 
     LazyColumn(
+        state = detailListState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 96.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -501,8 +629,9 @@ private fun ProjectDetailPane(
             Card(
                 shape = RoundedCornerShape(30.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = project.accent.container.copy(alpha = 0.55f)
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                 ),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(
@@ -526,20 +655,21 @@ private fun ProjectDetailPane(
                             }
                             Surface(
                                 shape = CircleShape,
-                                color = project.accent.solid,
+                                color = accentVibrant,
+                                contentColor = accentOnVibrant,
                                 modifier = Modifier.size(40.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Icon(
                                         imageVector = project.icon.vector,
-                                        contentDescription = null,
-                                        tint = Color.White
+                                        contentDescription = null
                                     )
                                 }
                             }
                             Text(
                                 text = project.name,
                                 style = MaterialTheme.typography.headlineSmall,
+                                color = MaterialTheme.colorScheme.onSurface,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -568,7 +698,11 @@ private fun ProjectDetailPane(
                     }
 
                     if (project.description.isNotBlank()) {
-                        Text(project.description, style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            text = project.description,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
 
                     Row(
@@ -578,12 +712,13 @@ private fun ProjectDetailPane(
                     ) {
                         Text(
                             text = "${stats.doneCount} of ${stats.totalCount} work items done",
-                            style = MaterialTheme.typography.labelLarge
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
                             text = "${(stats.completionFraction * 100).toInt()}%",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = project.accent.solid
+                            style = CondensedStatStyle,
+                            color = accentVibrant
                         )
                     }
 
@@ -592,8 +727,8 @@ private fun ProjectDetailPane(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(12.dp),
-                        color = project.accent.solid,
-                        trackColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f),
+                        color = accentVibrant,
+                        trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                         amplitude = { 0f }
                     )
 

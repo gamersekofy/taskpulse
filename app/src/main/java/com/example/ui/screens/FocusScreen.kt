@@ -3,6 +3,7 @@ package com.example.ui.screens
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
@@ -38,6 +40,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,6 +60,8 @@ import com.example.ui.components.LiveSessionHeroCard
 import com.example.ui.components.WorkItemExpressiveCard
 import com.example.ui.components.bouncyPressScale
 import com.example.ui.components.rememberExpressiveHaptics
+import com.example.ui.theme.CondensedStatStyle
+import com.example.ui.theme.DarkMintTertiary
 import com.example.ui.theme.MintTertiary
 
 @Composable
@@ -77,6 +84,7 @@ fun FocusScreen(
     onDeleteItem: (WorkItem) -> Unit,
     onCreateWorkItem: () -> Unit,
     onCreateProject: () -> Unit,
+    onFabExpandedChange: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val activeOrPaused = data.activeRunningItem ?: data.pausedItem
@@ -106,6 +114,24 @@ fun FocusScreen(
         val isTabletSplit = maxWidth >= 720.dp && maxHeight >= 520.dp
         val isPhoneLandscape = maxWidth > maxHeight && maxHeight < 520.dp
 
+        val tabletPrimaryListState = rememberLazyListState()
+        val tabletSecondaryListState = rememberLazyListState()
+        val phoneListState = rememberLazyListState()
+
+        val isAtTop by remember(isTabletSplit) {
+            derivedStateOf {
+                if (isTabletSplit) {
+                    (tabletPrimaryListState.firstVisibleItemIndex == 0 && tabletPrimaryListState.firstVisibleItemScrollOffset < 120) &&
+                        (tabletSecondaryListState.firstVisibleItemIndex == 0 && tabletSecondaryListState.firstVisibleItemScrollOffset < 120)
+                } else {
+                    phoneListState.firstVisibleItemIndex == 0 && phoneListState.firstVisibleItemScrollOffset < 120
+                }
+            }
+        }
+        LaunchedEffect(isAtTop) {
+            onFabExpandedChange(isAtTop)
+        }
+
         if (isTabletSplit) {
             Row(
                 modifier = Modifier
@@ -114,6 +140,7 @@ fun FocusScreen(
                 horizontalArrangement = Arrangement.spacedBy(20.dp)
             ) {
                 LazyColumn(
+                    state = tabletPrimaryListState,
                     modifier = Modifier
                         .weight(1.3f)
                         .fillMaxHeight(),
@@ -207,6 +234,7 @@ fun FocusScreen(
                 }
 
                 LazyColumn(
+                    state = tabletSecondaryListState,
                     modifier = Modifier
                         .weight(0.95f)
                         .fillMaxHeight(),
@@ -228,6 +256,7 @@ fun FocusScreen(
             }
         } else {
             LazyColumn(
+                state = phoneListState,
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 96.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -402,8 +431,9 @@ private fun FocusHeroSection(
         Card(
             shape = RoundedCornerShape(30.dp),
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
             ),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
@@ -517,9 +547,12 @@ private fun TodayProgressCard(
         .sumOf { it.totalWorkMinutes }
     val totalLoggedMinutes = data.workItems.sumOf { it.liveElapsedSeconds(nowMillis) } / 60L
 
+    val darkTheme = isSystemInDarkTheme()
+    val mintTone = if (darkTheme) DarkMintTertiary else MintTertiary
     Card(
         shape = RoundedCornerShape(28.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
         modifier = modifier.fillMaxWidth()
     ) {
         Row(
@@ -533,12 +566,12 @@ private fun TodayProgressCard(
                 CircularWavyProgressIndicator(
                     progress = { completionRatio },
                     modifier = Modifier.size(72.dp),
-                    color = MintTertiary,
+                    color = mintTone,
                     trackColor = MaterialTheme.colorScheme.surfaceContainerHigh
                 )
                 Text(
                     text = "${(completionRatio * 100).toInt()}%",
-                    style = MaterialTheme.typography.titleSmall
+                    style = CondensedStatStyle
                 )
             }
 
