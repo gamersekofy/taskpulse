@@ -127,8 +127,8 @@ private enum class SchedulePreset(val label: String) {
 
 private enum class TaskDeadlinePreset(val label: String) {
     NONE("None"),
-    TODAY_6PM("Today"),
-    TOMORROW_6PM("Tmrw"),
+    TODAY_END("Today"),
+    TOMORROW_END("Tmrw"),
     CUSTOM("Custom")
 }
 
@@ -464,7 +464,7 @@ fun WorkItemEditorSheet(
     var deadlinePreset by remember(existingItem) {
         mutableStateOf(
             when {
-                existingItem == null -> TaskDeadlinePreset.TODAY_6PM
+                existingItem == null -> TaskDeadlinePreset.TODAY_END
                 existingItem.deadlineMillis <= 0L -> TaskDeadlinePreset.NONE
                 else -> TaskDeadlinePreset.CUSTOM
             }
@@ -844,11 +844,11 @@ fun WorkItemEditorSheet(
                                             deadlinePreset = preset
                                             deadlineMillis = 0L
                                         }
-                                        TaskDeadlinePreset.TODAY_6PM -> {
+                                        TaskDeadlinePreset.TODAY_END -> {
                                             deadlinePreset = preset
                                             deadlineMillis = endOfDayPlusDays(0)
                                         }
-                                        TaskDeadlinePreset.TOMORROW_6PM -> {
+                                        TaskDeadlinePreset.TOMORROW_END -> {
                                             deadlinePreset = preset
                                             deadlineMillis = endOfDayPlusDays(1)
                                         }
@@ -1318,9 +1318,9 @@ private fun DateTimePickerModal(
 private fun endOfDayPlusDays(daysToAdd: Int): Long {
     val cal = Calendar.getInstance().apply {
         add(Calendar.DAY_OF_YEAR, daysToAdd)
-        set(Calendar.HOUR_OF_DAY, 18)
-        set(Calendar.MINUTE, 0)
-        set(Calendar.SECOND, 0)
+        set(Calendar.HOUR_OF_DAY, 23)
+        set(Calendar.MINUTE, 59)
+        set(Calendar.SECOND, 59)
         set(Calendar.MILLISECOND, 0)
     }
     return cal.timeInMillis

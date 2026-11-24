@@ -4,11 +4,16 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.example.data.PomodoroPhase
 import com.example.data.PomodoroSlotState
+import com.example.data.Project
+import com.example.data.ProjectColor
 import com.example.data.WorkItem
 import com.example.data.WorkStatus
 import com.example.ui.TimeFormatting
+import com.example.widget.WidgetSnapshotCodec
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -87,5 +92,47 @@ class ExampleRobolectricTest {
         assertEquals(1, snap.slots.size)
         assertNull(snap.nextSlot)
         assertEquals(2700L, snap.phaseRemainingSeconds)
+    }
+
+    @Test
+    fun `widget snapshot json round trip preserves active pomodoro and queue`() {
+        val now = 2_000_000L
+        val project = Project(id = "proj_1", name = "Widget Dev", colorKey = ProjectColor.INDIGO.name)
+        val running = WorkItem(
+            id = "w1",
+            projectId = "proj_1",
+            title = "Ship Glance Widget",
+            status = WorkStatus.IN_PROGRESS.name,
+            pomodoroWorkMinutes = 25L,
+            pomodoroBreakMinutes = 5L,
+            pomodoroWorkPeriods = 2L,
+            pomodoroBreakCount = 1L,
+            sessionStartedAtMillis = now - 60_000L
+        )
+        val upcoming = WorkItem(
+            id = "w2",
+            projectId = "proj_1",
+            title = "Test 3-button nav bar",
+            status = WorkStatus.TODO.name,
+            scheduledStartMillis = now + 3_600_000L,
+            pomodoroWorkMinutes = 15L,
+            pomodoroWorkPeriods = 1L,
+            pomodoroBreakCount = 0L
+        )
+        val state = WidgetSnapshotCodec.buildState(
+            isSignedIn = true,
+            userName = "Alex",
+            projects = listOf(project),
+            workItems = listOf(upcoming, running),
+            nowMillis = now
+        )
+        val decoded = WidgetSnapshotCodec.decode(WidgetSnapshotCodec.encode(state))
+        assertTrue(decoded.isSignedIn)
+        assertNotNull(decoded.heroItem)
+        assertEquals("w1", decoded.heroItem?.id)
+        assertEquals("Widget Dev", decoded.heroItem?.projectName)
+        assertEquals(1440L, decoded.heroItem?.livePhaseRemainingSeconds(now))
+        assertEquals(1, decoded.upNextItems.size)
+        assertEquals("w2", decoded.upNextItems.first().id)
     }
 }

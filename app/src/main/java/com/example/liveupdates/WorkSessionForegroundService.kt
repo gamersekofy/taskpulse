@@ -12,6 +12,8 @@ import com.example.data.PomodoroPhase
 import com.example.data.TaskPulseRepository
 import com.example.data.WorkItem
 import com.example.data.WorkStatus
+import com.example.wearsync.PhoneWearSyncManager
+import com.example.widget.WidgetSnapshotStore
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 import kotlinx.coroutines.CoroutineScope
@@ -97,6 +99,13 @@ class WorkSessionForegroundService : Service() {
                 activeItem = syncedItem
                 phaseTransitionInFlight = false
                 startForegroundWithLiveUpdate(syncedItem)
+                serviceScope.launch(Dispatchers.IO) {
+                    WidgetSnapshotStore.syncFromActiveService(
+                        context = applicationContext,
+                        activeItem = syncedItem,
+                        projectName = activeProjectName
+                    )
+                }
                 startTicker()
             }
         }
@@ -172,16 +181,25 @@ class WorkSessionForegroundService : Service() {
                                 nextSlot = nextSlot
                             )
                             if (nextSlot == null) {
+                                WidgetSnapshotStore.syncFromRepository(applicationContext)
+                                PhoneWearSyncManager.publishFromRepository(applicationContext)
                                 stopForegroundAndSelf()
                             } else {
                                 // Update local item optimistically so ticker continues cleanly
-                                activeItem = expectedItem.copy(
+                                val nextItem = expectedItem.copy(
                                     elapsedSeconds = expectedItem.liveElapsedSeconds(now),
                                     pomodoroPhase = if (nextSlot.isBreak) PomodoroPhase.BREAK.name else PomodoroPhase.WORK.name,
                                     currentPeriodIndex = nextSlot.index.toLong(),
                                     phaseElapsedSeconds = 0L,
                                     sessionStartedAtMillis = now
                                 )
+                                activeItem = nextItem
+                                WidgetSnapshotStore.syncFromActiveService(
+                                    context = applicationContext,
+                                    activeItem = nextItem,
+                                    projectName = activeProjectName
+                                )
+                                PhoneWearSyncManager.publishFromRepository(applicationContext)
                                 phaseTransitionInFlight = false
                             }
                         } else {
@@ -211,6 +229,8 @@ class WorkSessionForegroundService : Service() {
         }
         serviceScope.launch(Dispatchers.IO) {
             repository.pauseWorkSession(item, now)
+            WidgetSnapshotStore.syncFromRepository(applicationContext)
+            PhoneWearSyncManager.publishFromRepository(applicationContext)
             stopForegroundAndSelf()
         }
     }
@@ -223,15 +243,24 @@ class WorkSessionForegroundService : Service() {
             val res = repository.advancePomodoroPhase(item, autoContinue = true, nowMillis = now)
             res.onSuccess { nextSlot ->
                 if (nextSlot == null) {
+                    WidgetSnapshotStore.syncFromRepository(applicationContext)
+                    PhoneWearSyncManager.publishFromRepository(applicationContext)
                     stopForegroundAndSelf()
                 } else {
-                    activeItem = item.copy(
+                    val nextItem = item.copy(
                         elapsedSeconds = item.liveElapsedSeconds(now),
                         pomodoroPhase = if (nextSlot.isBreak) PomodoroPhase.BREAK.name else PomodoroPhase.WORK.name,
                         currentPeriodIndex = nextSlot.index.toLong(),
                         phaseElapsedSeconds = 0L,
                         sessionStartedAtMillis = now
                     )
+                    activeItem = nextItem
+                    WidgetSnapshotStore.syncFromActiveService(
+                        context = applicationContext,
+                        activeItem = nextItem,
+                        projectName = activeProjectName
+                    )
+                    PhoneWearSyncManager.publishFromRepository(applicationContext)
                     phaseTransitionInFlight = false
                 }
             }.onFailure {
@@ -249,6 +278,8 @@ class WorkSessionForegroundService : Service() {
         }
         serviceScope.launch(Dispatchers.IO) {
             repository.completeWorkSession(item, now)
+            WidgetSnapshotStore.syncFromRepository(applicationContext)
+            PhoneWearSyncManager.publishFromRepository(applicationContext)
             stopForegroundAndSelf()
         }
     }

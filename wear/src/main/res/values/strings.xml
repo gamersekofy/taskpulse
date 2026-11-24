@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">TaskPulse</string>
+    <string name="live_update_channel_name">Pomodoro Live Timer</string>
+    <string name="live_update_channel_description">Displays real-time Pomodoro countdown via Ongoing Activity and Wear Live Updates.</string>
+    <string name="pomodoro_alert_channel_name">Pomodoro Watch Alerts</string>
+    <string name="pomodoro_alert_channel_description">Alerts you on your wrist when a work period or break transitions.</string>
+    <string name="notif_action_pause">Pause</string>
+    <string name="notif_action_next">Next</string>
+    <string name="notif_action_done">Complete</string>
+</resources>

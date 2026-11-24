@@ -2,11 +2,16 @@ package com.example
 
 import com.example.data.PomodoroPhase
 import com.example.data.PomodoroSlotState
+import com.example.data.Project
+import com.example.data.ProjectColor
 import com.example.data.WorkItem
 import com.example.data.WorkStatus
 import com.example.ui.TimeFormatting
+import com.example.widget.WidgetSnapshotCodec
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ExampleUnitTest {
@@ -71,5 +76,56 @@ class ExampleUnitTest {
         assertEquals(1, snap.slots.size)
         assertNull(snap.nextSlot)
         assertEquals(2700L, snap.phaseRemainingSeconds)
+    }
+
+    @Test
+    fun widgetSnapshotBuildAndJsonRoundTripPreservesHeroAndQueue() {
+        val now = 2_000_000L
+        val project = Project(id = "proj_1", name = "Widget Dev", colorKey = ProjectColor.INDIGO.name)
+        val running = WorkItem(
+            id = "w1",
+            projectId = "proj_1",
+            title = "Ship Glance Widget",
+            status = WorkStatus.IN_PROGRESS.name,
+            pomodoroWorkMinutes = 25L,
+            pomodoroBreakMinutes = 5L,
+            pomodoroWorkPeriods = 2L,
+            pomodoroBreakCount = 1L,
+            sessionStartedAtMillis = now - 60_000L
+        )
+        val upcoming = WorkItem(
+            id = "w2",
+            projectId = "proj_1",
+            title = "Test 3-button nav bar",
+            status = WorkStatus.TODO.name,
+            scheduledStartMillis = now + 3_600_000L,
+            pomodoroWorkMinutes = 15L,
+            pomodoroWorkPeriods = 1L,
+            pomodoroBreakCount = 0L
+        )
+        val done = WorkItem(
+            id = "w3",
+            projectId = "proj_1",
+            title = "Fix Today deadline",
+            status = WorkStatus.DONE.name
+        )
+
+        val state = WidgetSnapshotCodec.buildState(
+            isSignedIn = true,
+            userName = "Alex",
+            projects = listOf(project),
+            workItems = listOf(upcoming, done, running),
+            nowMillis = now
+        )
+
+        assertTrue(state.isSignedIn)
+        assertEquals(2, state.activeCount)
+        assertEquals(1, state.doneCount)
+        assertNotNull(state.heroItem)
+        assertEquals("w1", state.heroItem?.id)
+        assertEquals("Widget Dev", state.heroItem?.projectName)
+        assertEquals(1440L, state.heroItem?.livePhaseRemainingSeconds(now))
+        assertEquals(1, state.upNextItems.size)
+        assertEquals("w2", state.upNextItems.first().id)
     }
 }

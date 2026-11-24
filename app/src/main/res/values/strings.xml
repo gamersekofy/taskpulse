@@ -15,4 +15,6 @@
     <string name="notif_action_resume">Resume</string>
     <string name="notif_action_next">Next</string>
     <string name="notif_action_done">Complete</string>
+    <string name="widget_focus_name">TaskPulse Focus &amp; Timer</string>
+    <string name="widget_focus_description">Track your active Pomodoro focus period, live countdown, and upcoming work items right on your home screen.</string>
 </resources>

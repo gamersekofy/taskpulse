@@ -608,4 +608,22 @@ class TaskPulseRepository(
             Result.failure(e)
         }
     }
+
+    suspend fun fetchProjectsOnce(userId: String): List<Project> {
+        require(userId.isNotBlank()) { "User ID must not be blank" }
+        val snapshot = db.collection("users").document(userId).collection("projects")
+            .get()
+            .await()
+        return snapshot.toObjects(Project::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+            .filter { !it.archived }
+            .sortedByDescending { it.createdAt?.toDate()?.time ?: 0L }
+    }
+
+    suspend fun fetchWorkItemsOnce(userId: String): List<WorkItem> {
+        require(userId.isNotBlank()) { "User ID must not be blank" }
+        val snapshot = db.collection("users").document(userId).collection("workItems")
+            .get()
+            .await()
+        return snapshot.toObjects(WorkItem::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+    }
 }

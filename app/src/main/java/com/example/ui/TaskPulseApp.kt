@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.only
@@ -58,6 +59,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuite
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteDefaults
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffoldLayout
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteType
 import androidx.compose.runtime.Composable
@@ -72,6 +74,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -106,12 +109,16 @@ import com.example.ui.screens.ScheduleScreen
 import com.example.ui.sheets.ProjectEditorSheet
 import com.example.ui.sheets.WorkItemDetailSheet
 import com.example.ui.sheets.WorkItemEditorSheet
+import com.example.wearsync.PhoneWearSyncManager
+import com.example.widget.WidgetSnapshotStore
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 enum class PulseDestination(
     val labelRes: Int,
@@ -140,6 +147,10 @@ fun TaskPulseRootApp(auth: FirebaseAuth = Firebase.auth) {
     if (user == null) {
         LaunchedEffect(Unit) {
             WorkSessionForegroundService.stop(context)
+            withContext(Dispatchers.IO) {
+                WidgetSnapshotStore.clearSignedOut(context)
+                PhoneWearSyncManager.clearSignedOut(context)
+            }
         }
         AuthScreen(onAuthSuccess = { currentUser = auth.currentUser })
     } else {
@@ -233,6 +244,27 @@ private fun AuthenticatedTaskPulse(user: FirebaseUser) {
     }
 
     val successData = (dashboardState as? UiState.Success<DashboardData>)?.data
+    LaunchedEffect(successData, user.uid) {
+        if (successData != null) {
+            withContext(Dispatchers.IO) {
+                WidgetSnapshotStore.syncFromDashboard(
+                    context = context,
+                    userName = user.displayName ?: user.email ?: "",
+                    projects = successData.projects,
+                    workItems = successData.workItems
+                )
+                PhoneWearSyncManager.publishSnapshot(
+                    context = context,
+                    userId = user.uid,
+                    userName = user.displayName.orEmpty(),
+                    userEmail = user.email.orEmpty(),
+                    projects = successData.projects,
+                    workItems = successData.workItems
+                )
+            }
+        }
+    }
+
     val runningItem = successData?.activeRunningItem
     LaunchedEffect(
         runningItem?.id,
@@ -312,41 +344,52 @@ private fun AuthenticatedTaskPulse(user: FirebaseUser) {
     NavigationSuiteScaffoldLayout(
         layoutType = layoutType,
         navigationSuite = {
+            val suiteColors = NavigationSuiteDefaults.colors(
+                navigationBarContainerColor = Color.Transparent,
+                navigationRailContainerColor = Color.Transparent
+            )
             Surface(
                 color = MaterialTheme.colorScheme.surfaceContainer,
-                modifier = if (useNavRail) {
-                    Modifier.windowInsetsPadding(
-                        WindowInsets.safeDrawing.only(WindowInsetsSides.Start + WindowInsetsSides.Vertical)
-                    )
-                } else {
-                    Modifier.windowInsetsPadding(
-                        WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal)
-                    )
-                }
+                modifier = if (useNavRail) Modifier.fillMaxHeight() else Modifier.fillMaxWidth()
             ) {
-                NavigationSuite(
-                    layoutType = layoutType
-                ) {
-                    PulseDestination.entries.forEach { dest ->
-                        val selected = currentDestination == dest
-                        val label = context.getString(dest.labelRes)
-                        item(
-                            selected = selected,
-                            onClick = {
-                                if (currentDestination != dest) {
-                                    haptics.select()
-                                    currentDestination = dest
-                                }
-                            },
-                            icon = {
-                                Icon(
-                                    imageVector = if (selected) dest.selectedIcon else dest.unselectedIcon,
-                                    contentDescription = label
-                                )
-                            },
-                            label = { Text(label) },
-                            modifier = Modifier.testTag("nav_item_${dest.name.lowercase()}")
+                Box(
+                    modifier = if (useNavRail) {
+                        Modifier
+                            .windowInsetsPadding(
+                                WindowInsets.safeDrawing.only(WindowInsetsSides.Start + WindowInsetsSides.Vertical)
+                            )
+                            .padding(top = 64.dp)
+                    } else {
+                        Modifier.windowInsetsPadding(
+                            WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal)
                         )
+                    }
+                ) {
+                    NavigationSuite(
+                        layoutType = layoutType,
+                        colors = suiteColors
+                    ) {
+                        PulseDestination.entries.forEach { dest ->
+                            val selected = currentDestination == dest
+                            val label = context.getString(dest.labelRes)
+                            item(
+                                selected = selected,
+                                onClick = {
+                                    if (currentDestination != dest) {
+                                        haptics.select()
+                                        currentDestination = dest
+                                    }
+                                },
+                                icon = {
+                                    Icon(
+                                        imageVector = if (selected) dest.selectedIcon else dest.unselectedIcon,
+                                        contentDescription = label
+                                    )
+                                },
+                                label = { Text(label) },
+                                modifier = Modifier.testTag("nav_item_${dest.name.lowercase()}")
+                            )
+                        }
                     }
                 }
             }

@@ -24,4 +24,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "TaskPulse"
 
+include(":shared")
 include(":app")
+include(":wear")

@@ -106,11 +106,20 @@ object WorkSessionNotificationHelper {
         val isBreak = snap.currentPhase == PomodoroPhase.BREAK
         val remainingSeconds = snap.phaseRemainingSeconds
         val overtimeSeconds = snap.overtimeSeconds
-        val projectedEndMillis = nowMillis + (remainingSeconds * 1000L)
         val deadlineInfo = TimeFormatting.formatDeadlineCountdown(item.deadlineMillis, nowMillis, isDone = false)
+        val timerSummary = when {
+            overtimeSeconds > 0L -> "+${TimeFormatting.formatDurationClock(overtimeSeconds)} overtime"
+            else -> "${TimeFormatting.formatDurationClock(remainingSeconds)} left"
+        }
 
-        // Notice: Do NOT repeat the countdown timer inside contentText because Android renders the
-        // live chronometer in the notification header — avoids duplicate out-of-sync countdowns.
+        val subHeader = buildString {
+            append(timerSummary)
+            if (projectName.isNotBlank()) {
+                append(" • ")
+                append(projectName)
+            }
+        }
+
         val statusBody = buildString {
             if (isBreak) {
                 append("Break ${snap.currentPeriodIndex} • Rest & recharge")
@@ -209,11 +218,6 @@ object WorkSessionNotificationHelper {
                 nextTargetIntent
             ).build()
 
-            val subHeader = buildString {
-                append(projectName.ifBlank { "TaskPulse" })
-                append(if (isBreak) " • Rest" else " • Pomodoro")
-            }
-
             val builder = Notification.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_notification_pulse)
                 .setContentTitle(item.title)
@@ -221,6 +225,8 @@ object WorkSessionNotificationHelper {
                 .setContentText(statusBody)
                 .setOngoing(true)
                 .setOnlyAlertOnce(true)
+                .setShowWhen(false)
+                .setUsesChronometer(false)
                 .setContentIntent(contentIntent)
                 .setRequestPromotedOngoing(true)
                 .setShortCriticalText(shortChip)
@@ -228,41 +234,23 @@ object WorkSessionNotificationHelper {
                 .addAction(pauseAction)
                 .addAction(secondaryAction)
 
-            if (remainingSeconds > 0L) {
-                builder
-                    .setWhen(projectedEndMillis)
-                    .setShowWhen(true)
-                    .setUsesChronometer(true)
-                    .setChronometerCountDown(true)
-            } else {
-                builder.setShowWhen(false)
-            }
-
             return builder.build()
         }
 
         val compatBuilder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification_pulse)
             .setContentTitle(item.title)
-            .setSubText(projectName.ifBlank { "TaskPulse" })
+            .setSubText(subHeader)
             .setContentText(statusBody)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
+            .setShowWhen(false)
+            .setUsesChronometer(false)
             .setContentIntent(contentIntent)
             .setProgress(1000, overallThousand, false)
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
             .addAction(0, context.getString(R.string.notif_action_pause), pausePendingIntent)
             .addAction(0, context.getString(R.string.notif_action_done), completePendingIntent)
-
-        if (remainingSeconds > 0L) {
-            compatBuilder
-                .setWhen(projectedEndMillis)
-                .setShowWhen(true)
-                .setUsesChronometer(true)
-                .setChronometerCountDown(true)
-        } else {
-            compatBuilder.setShowWhen(false)
-        }
 
         return compatBuilder.build()
     }

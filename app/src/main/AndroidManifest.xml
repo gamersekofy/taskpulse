@@ -40,6 +40,30 @@
                 android:value="Displays real-time remaining duration of an active user-initiated work session via Android Live Updates notifications." />
         </service>
 
+        <receiver
+            android:name=".widget.TaskPulseWidgetReceiver"
+            android:exported="false"
+            android:label="@string/widget_focus_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/task_pulse_widget_info" />
+        </receiver>
+
+        <service
+            android:name=".wearsync.PhoneWearListenerService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
+                <data
+                    android:host="*"
+                    android:pathPrefix="/taskpulse"
+                    android:scheme="wear" />
+            </intent-filter>
+        </service>
+
     </application>
 
 </manifest>
