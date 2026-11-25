@@ -24,17 +24,40 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
 
-      - name: Generate debug keystore and prepare .env
+      - name: Restore Firebase google-services.json
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: |
-          keytool -genkeypair -v \
-            -keystore debug.keystore \
-            -storepass android \
-            -alias androiddebugkey \
-            -keypass android \
-            -keyalg RSA \
-            -keysize 2048 \
-            -validity 10000 \
-            -dname "CN=Android Debug,O=Android,C=US"
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
+            printf '%s' "$GOOGLE_SERVICES_JSON" > wear/google-services.json
+          fi
+
+          if [ ! -f app/google-services.json ] || [ ! -f wear/google-services.json ]; then
+            echo "::error::Missing google-services.json in app/ and wear/. Add the GOOGLE_SERVICES_JSON GitHub repository secret (copied from app/google-services.json in AI Studio) so Firebase initializes on launch instead of crashing."
+            exit 1
+          fi
+
+      - name: Prepare debug keystore and .env
+        env:
+          DEBUG_KEYSTORE_BASE64: ${{ secrets.DEBUG_KEYSTORE_BASE64 }}
+        run: |
+          if [ -f debug.keystore.base64 ]; then
+            base64 --decode debug.keystore.base64 > debug.keystore
+          elif [ -n "$DEBUG_KEYSTORE_BASE64" ]; then
+            printf '%s' "$DEBUG_KEYSTORE_BASE64" | tr -d '\r\n ' | base64 --decode > debug.keystore
+          else
+            echo "::warning::DEBUG_KEYSTORE_BASE64 secret not set; generating a temporary debug keystore. Google Sign-In SHA-1 verification will fail until DEBUG_KEYSTORE_BASE64 is added."
+            keytool -genkeypair -v \
+              -keystore debug.keystore \
+              -storepass android \
+              -alias androiddebugkey \
+              -keypass android \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
           if [ ! -f .env ]; then touch .env; fi
 
       - name: Set up Gradle
